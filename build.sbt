@@ -132,6 +132,10 @@ lazy val PlayAkkaHttp2SupportProject =
       libraryDependencies += akkaHttp2Support
     )
 
+lazy val PlayArmeriaServerProject = PlayCrossBuiltProject("Play-Armeria-Server", "transport/server/play-armeria-server")
+  .settings(libraryDependencies += armeria)
+  .dependsOn(PlayServerProject)
+
 lazy val PlayClusterSharding = PlayCrossBuiltProject("Play-Cluster-Sharding", "cluster/play-cluster-sharding")
   .settings(libraryDependencies ++= clusterDependencies)
   .dependsOn(PlayProject)
@@ -295,6 +299,8 @@ lazy val PlayFiltersHelpersProject = PlayCrossBuiltProject("Filters-Helpers", "w
     PlayAkkaHttpServerProject % "test" // Because we need a server provider when running the tests
   )
 
+logLevel in Scope.Global := Level.Debug
+
 lazy val PlayIntegrationTestProject = PlayCrossBuiltProject("Play-Integration-Test", "core/play-integration-test")
 // This project is just for testing Play, not really a public artifact
   .settings(disablePublishing)
@@ -322,6 +328,7 @@ lazy val PlayIntegrationTestProject = PlayCrossBuiltProject("Play-Integration-Te
   .dependsOn(PlayJavaFormsProject)
   .dependsOn(PlayAkkaHttpServerProject)
   .dependsOn(PlayAkkaHttp2SupportProject)
+  .dependsOn(PlayArmeriaServerProject)
   .dependsOn(PlayNettyServerProject)
 
 // NOTE: this project depends on JMH, which is GPLv2.
@@ -345,9 +352,9 @@ lazy val PlayMicrobenchmarkProject = PlayCrossBuiltProject("Play-Microbenchmark"
     mimaPreviousArtifacts := Set.empty
   )
   .dependsOn(
-    PlayProject                % "test->test",
-    PlayLogback                % "test->test",
-    PlayIntegrationTestProject % "test->it",
+    PlayProject % "test->test",
+    PlayLogback % "test->test",
+//    PlayIntegrationTestProject % "test->test",
     PlayAhcWsProject,
     PlaySpecs2Project,
     PlayFiltersHelpersProject,

@@ -94,6 +94,27 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
     withServerAndConfig()(action)(block)
   }
 
+  def headerNameInRequest(headerName: String, headerValue: String): MatchResult[Either[String, _]] = {
+    withServer((Action, _) =>
+      Action { rh =>
+        Results.Ok(rh.headers.keys.filter(_.equalsIgnoreCase(headerName)).mkString)
+      }
+    ) { port =>
+      val Seq(response) = BasicHttpClient.makeRequests(port)(
+        // an empty body implies no parsing is used and no content type is derived from the body.
+        BasicRequest("GET", "/", "HTTP/1.1", Map(headerName -> headerValue), "")
+      )
+      this match {
+        case _: ArmeriaRequestHeadersSpec =>
+          // Armeria internally converts header names to lowercase to support HTTP/2 requirements
+          // while also not violating HTTP/1 requirements.
+          response.body.left.map(_.toLowerCase()) must beLeft(headerName.toLowerCase())
+        case _ =>
+          response.body must beLeft(headerName)
+      }
+    }
+  }
+
   "Play request header handling" should {
     "get request headers properly" in withServer((Action, _) =>
       Action { rh => Results.Ok(rh.headers.getAll("Origin").mkString(",")) }
@@ -177,6 +198,7 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           )
         )
         response.body must beLeft(
+          // TODO(ikhoon): Drop content-encoding
           "Content-Encoding -> None, " +
             "Authorization -> Some(Bearer 123), " +
             "X-Custom-Header -> Some(123)"
@@ -264,8 +286,27 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           response.body must beLeft(s"true")
         }
       }
+
       "encoded uri" in uriInRequest("/foo%3Abar?bar%3Abaz=foo")
       "decoded uri" in uriInRequest("/foo:bar?bar:baz=foo")
+    }
+  }
+}
+
+class ArmeriaRequestHeadersSpec extends RequestHeadersSpec with ArmeriaIntegrationSpecification {
+  override def headerNameInRequest(headerName: String, headerValue: String): MatchResult[Either[String, _]] = {
+    withServer((Action, _) =>
+      Action { rh =>
+        Results.Ok(rh.headers.keys.filter(_.equalsIgnoreCase(headerName)).mkString)
+      }
+    ) { port =>
+      val Seq(response) = BasicHttpClient.makeRequests(port)(
+        // an empty body implies no parsing is used and no content type is derived from the body.
+        BasicRequest("GET", "/", "HTTP/1.1", Map(headerName -> headerValue), "")
+      )
+      // Armeria internally converts header names to lowercase to support HTTP/2 requirements
+      // while also not violating HTTP/1 requirements.
+      response.body.left.map(_.toLowerCase()) must beLeft(headerName.toLowerCase())
     }
   }
 }

@@ -19,6 +19,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class NettyHttpPipeliningSpec    extends HttpPipeliningSpec with NettyIntegrationSpecification
 class AkkaHttpHttpPipeliningSpec extends HttpPipeliningSpec with AkkaHttpIntegrationSpecification
+// TODO(ikhoon): Wait until Armeria fixes the HTTP pipelining bug
+class ArmeriaHttpPipeliningSpec  extends HttpPipeliningSpec with ArmeriaIntegrationSpecification
 
 trait HttpPipeliningSpec extends PlaySpecification with ServerIntegrationSpecification {
   val actorSystem = akka.actor.ActorSystem()
@@ -47,7 +49,7 @@ trait HttpPipeliningSpec extends PlaySpecification with ServerIntegrationSpecifi
       responses(0).body must beLeft("long")
       responses(1).status must_== 200
       responses(1).body must beLeft("short")
-    }.skipOnSlowCIServer
+    }
 
     "wait for the first response body to return before returning the second" in withServer(EssentialAction { req =>
       req.path match {

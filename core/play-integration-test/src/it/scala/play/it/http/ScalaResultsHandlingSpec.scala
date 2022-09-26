@@ -28,6 +28,8 @@ import play.api.http.HttpEntity
 class NettyScalaResultsHandlingSpec    extends ScalaResultsHandlingSpec with NettyIntegrationSpecification
 class AkkaHttpScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with AkkaHttpIntegrationSpecification
 
+class ArmeriaScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with ArmeriaIntegrationSpecification
+
 trait ScalaResultsHandlingSpec
     extends PlaySpecification
     with WsTestClient
@@ -141,7 +143,13 @@ trait ScalaResultsHandlingSpec
       Results.Ok.sendEntity(HttpEntity.Streamed(Source(List("abc", "def", "ghi")).map(ByteString.apply), None, None))
     ) { response =>
       response.header(CONTENT_LENGTH) must beNone
-      response.header(TRANSFER_ENCODING) must beNone
+      this match {
+        case _: ArmeriaScalaResultsHandlingSpec =>
+          // Armeria uses chunked transfer encoding to send a streaming message for HTTP/1
+          response.header(TRANSFER_ENCODING) must beSome("chunked")
+        case _ =>
+          response.header(TRANSFER_ENCODING) must beNone
+      }
       response.body must_== "abcdefghi"
     }
 
@@ -215,7 +223,9 @@ trait ScalaResultsHandlingSpec
       response.headers.get(CONTENT_LENGTH) must beNone
       response.headers.get(CONNECTION) must beSome("close")
       response.body must beLeft("abc")
-    }
+    // As per https://www.rfc-editor.org/rfc/rfc2068.html#section-19.7.1, HTTP/1.1 does not need to close
+    // the connection after transfer encoding.
+    }.skipUntilArmeriaFixed
 
     "close the HTTP 1.1 connection when requested" in withServer(
       Results.Ok.withHeaders(CONNECTION -> "close")
@@ -329,7 +339,7 @@ trait ScalaResultsHandlingSpec
       response.body must beRight
       val Right((chunks, trailers)) = response.body
       chunks must containAllOf(Seq("aa", "bb", "cc")).inOrder
-      trailers.get("Chunks") must beSome("3")
+      trailers.get("chunks") must beSome("3")
     }
 
     "keep chunked connections alive by default" in withServer(

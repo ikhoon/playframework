@@ -10,17 +10,17 @@ import org.specs2.mutable.SpecificationLike
 import org.specs2.specification.AroundEach
 import play.api.Application
 import play.api.inject.guice.GuiceApplicationBuilder
+import play.core.server.AkkaHttpServer
+import play.core.server.ArmeriaServer
 import play.core.server.NettyServer
 import play.core.server.ServerProvider
-import play.core.server.AkkaHttpServer
-
 import scala.concurrent.duration._
 
 /**
  * Helper for creating tests that test integration with different server
  * backends. Common integration tests should implement this trait, then
- * two specific tests should be created, one extending NettyIntegrationSpecification
- * and another extending AkkaHttpIntegrationSpecification.
+ * three specific tests should be created, which extends NettyIntegrationSpecification,
+ * AkkaHttpIntegrationSpecification and ArmeriaIntegrationSpecification.
  *
  * When a test extends this trait it will automatically get overridden versions of
  * TestServer and WithServer that delegate to the correct server backend.
@@ -49,8 +49,21 @@ trait ServerIntegrationSpecification extends PendingUntilFixed with AroundEach {
      * won't remind us if the tests start passing.
      */
     def skipUntilAkkaHttpFixed: Result = parent match {
-      case _: NettyIntegrationSpecification    => ResultExecution.execute(AsResult(t))
       case _: AkkaHttpIntegrationSpecification => Skipped()
+      case _ => ResultExecution.execute(AsResult(t))
+    }
+  }
+
+  implicit class UntilArmeriaFixed[T: AsResult](t: => T) {
+
+    /**
+     * We may want to skip some tests if Armeria does not support some features.
+     * For example, Armeria assumes an HTTP/1.x connection is HTTP/1.1. so "Connection: close" aren't sent to
+     * the response headers by default.
+     */
+    def skipUntilArmeriaFixed: Result = parent match {
+      case _: ArmeriaIntegrationSpecification => Skipped()
+      case _ => ResultExecution.execute(AsResult(t))
     }
   }
 
@@ -104,4 +117,13 @@ trait AkkaHttpIntegrationSpecification extends ServerIntegrationSpecification {
   self: SpecificationLike =>
 
   final override def integrationServerProvider: ServerProvider = AkkaHttpServer.provider
+}
+
+/** Run integration tests against an Armeria server */
+trait ArmeriaIntegrationSpecification extends ServerIntegrationSpecification {
+  self: SpecificationLike =>
+
+  // TODO(ikhoon): Should we need `skipArmeriaTests` like `skipNettyTests`?
+
+  final override def integrationServerProvider: ServerProvider = ArmeriaServer.provider
 }
