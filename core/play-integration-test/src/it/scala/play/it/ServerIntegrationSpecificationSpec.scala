@@ -20,6 +20,11 @@ class AkkaHttpServerIntegrationSpecificationSpec
     with AkkaHttpIntegrationSpecification {
   override def expectedServerTag = None
 }
+class ArmeriaServerIntegrationSpecificationSpec
+    extends ServerIntegrationSpecificationSpec
+    with ArmeriaIntegrationSpecification {
+  override def expectedServerTag = Some("armeria")
+}
 
 /**
  * Tests that the ServerIntegrationSpecification, a helper for testing with different

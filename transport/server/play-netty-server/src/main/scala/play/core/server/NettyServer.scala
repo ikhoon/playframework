@@ -378,7 +378,7 @@ class NettyServerProvider extends ServerProvider {
 }
 
 /**
- * Create a Netty server zfrom a given router using [[BuiltInComponents]]:
+ * Create a Netty server from a given router using [[BuiltInComponents]]:
  *
  * {{{
  *   val server = NettyServer.fromRouterWithComponents(ServerConfig(port = Some(9002))) { components =>

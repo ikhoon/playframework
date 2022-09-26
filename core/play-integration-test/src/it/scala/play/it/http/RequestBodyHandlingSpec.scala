@@ -23,8 +23,11 @@ import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
 import scala.util.Random
 
-class NettyRequestBodyHandlingSpec    extends RequestBodyHandlingSpec with NettyIntegrationSpecification
+class NettyRequestBodyHandlingSpec extends RequestBodyHandlingSpec with NettyIntegrationSpecification
+
 class AkkaHttpRequestBodyHandlingSpec extends RequestBodyHandlingSpec with AkkaHttpIntegrationSpecification
+
+class ArmeriaRequestBodyHandlingSpec extends RequestBodyHandlingSpec with ArmeriaIntegrationSpecification
 
 trait RequestBodyHandlingSpec extends PlaySpecification with ServerIntegrationSpecification {
   sequential
@@ -150,7 +153,15 @@ trait RequestBodyHandlingSpec extends PlaySpecification with ServerIntegrationSp
       )
       responses.length must_== 1
       responses(0).status must_== 413
-      responses(0).body.left.getOrElse("") must_=== "Origin: server-backend / Request Entity Too Large"
+      val expectedBody = this match {
+        case body: ArmeriaRequestBodyHandlingSpec =>
+          // Armeria limits the max request length at the HTTP decoder level where HttpErrorHandler is not
+          // applicable.
+          "Status: 413\nDescription: Request Entity Too Large\n"
+        case _ =>
+          "Origin: server-backend / Request Entity Too Large"
+      }
+      responses(0).body.left.getOrElse("") must_=== expectedBody
     }
 
     "handle a big http request with exact amount of allowed Content-Length" in withServerAndConfig(

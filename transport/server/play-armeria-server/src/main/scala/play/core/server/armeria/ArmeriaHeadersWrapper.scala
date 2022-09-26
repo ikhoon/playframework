@@ -1,0 +1,39 @@
+/*
+ * Copyright (C) Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package play.core.server.armeria
+
+import com.linecorp.armeria.common.RequestHeaders
+import play.api.mvc.Headers
+import play.core.server.armeria.ArmeriaCollectionUtil.toSeq
+
+/**
+ * An implementation of Play `Headers` that wraps the raw Armeria headers to
+ * avoid additional copies for some common read operations.
+ */
+private final class ArmeriaHeadersWrapper(armeriaHeaders: RequestHeaders) extends Headers(null) {
+
+  override def headers: Seq[(String, String)] = {
+    if (_headers == null) {
+      // Lazily initialize the header sequence using the Armeria headers. It's OK
+      // if we do this operation concurrently because the operation is idempotent.
+      val builder = Seq.newBuilder[(String, String)]
+      builder.sizeHint(armeriaHeaders.size())
+      armeriaHeaders.forEach(entry => {
+        builder += entry.getKey.toString() -> entry.getValue
+      })
+      _headers = builder.result()
+    }
+    _headers
+  }
+
+  override def get(key: String): Option[String] = Option(armeriaHeaders.get(key))
+
+  override def apply(key: String): String = {
+    val value = armeriaHeaders.get(key)
+    if (value == null) scala.sys.error("Header doesn't exist") else value
+  }
+
+  override def getAll(key: String): Seq[String] = toSeq(armeriaHeaders.getAll(key))
+}

@@ -21,6 +21,7 @@ import play.it._
 
 class NettySessionCookieSpec    extends SessionCookieSpec with NettyIntegrationSpecification
 class AkkaHttpSessionCookieSpec extends SessionCookieSpec with AkkaHttpIntegrationSpecification
+class ArmeriaSessionCookieSpec  extends SessionCookieSpec with ArmeriaIntegrationSpecification
 
 trait SessionCookieSpec extends PlaySpecification with ServerIntegrationSpecification with WsTestClient {
   sequential
