@@ -95,6 +95,7 @@ class ArmeriaServer(
 
     configureGracefulShutdown(serverBuilder)
 
+    // TODO(ikhoon): Customize TLS using configurations.
     serverBuilder.tlsCustomizer(customizer => {
       val clientAuth = if (httpsNeedClientAuth) {
         ClientAuth.REQUIRE
@@ -106,22 +107,23 @@ class ArmeriaServer(
       customizer.clientAuth(clientAuth)
     })
 
-    // TODO(ikhoon): Add server header decorator
     applicationProvider.get.map(application => {
-      try {
-        val configurator = application.injector.instanceOf[ArmeriaServerConfigurator]
+      val configurator =
+        try {
+          application.injector.instanceOf[ArmeriaServerConfigurator]
+        } catch {
+          case NonFatal(_) => null // ignore silently
+        }
+
+      if (configurator != null) {
         // Customize serverBuilder with the user-defined configurator
         configurator.configure(serverBuilder)
-      } catch {
-        case NonFatal(ex) =>
-          // TODO(ikhoon): Ignore silently
-          logger.warn(ex.getMessage, ex)
       }
     })
-    val service = new PlayHttpService(this)
 
-    // TODO(ikhoon): Customize TLS configurations
+    val service = new PlayHttpService(this)
     serverBuilder.serviceUnder("/", service)
+
     val armeriaServer = serverBuilder.build()
     armeriaServer.start().join()
     armeriaServer
