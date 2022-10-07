@@ -27,6 +27,7 @@ import play.api.routing.Router
 import play.core.ApplicationProvider
 import play.core.server.ArmeriaServer.logger
 import play.core.server.Server.ServerStoppedReason
+import play.core.server.armeria.ArmeriaServerConfigurator
 import play.core.server.armeria.PlayHttpService
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -35,6 +36,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.FutureConverters._
+import scala.util.control.NonFatal
 
 class ArmeriaServer(
     config: ServerConfig,
@@ -105,6 +107,17 @@ class ArmeriaServer(
     })
 
     // TODO(ikhoon): Add server header decorator
+    applicationProvider.get.map(application => {
+      try {
+        val configurator = application.injector.instanceOf[ArmeriaServerConfigurator]
+        // Customize serverBuilder with the user-defined configurator
+        configurator.configure(serverBuilder)
+      } catch {
+        case NonFatal(ex) =>
+          // TODO(ikhoon): Ignore silently
+          logger.warn(ex.getMessage, ex)
+      }
+    })
     val service = new PlayHttpService(this)
 
     // TODO(ikhoon): Customize TLS configurations
