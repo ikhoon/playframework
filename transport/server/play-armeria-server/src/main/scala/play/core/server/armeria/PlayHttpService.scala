@@ -52,14 +52,20 @@ private[server] final class PlayHttpService(server: ArmeriaServer) extends HttpS
    */
   private val reloadCache = new ReloadCache[ReloadCacheValues] {
     protected override def reloadValue(tryApp: Try[Application]): ReloadCacheValues = {
-      val serverResultUtils      = reloadServerResultUtils(tryApp)
-      val forwardedHeaderHandler = reloadForwardedHeaderHandler(tryApp)
-      val modelConversion        = new ArmeriaModelConversion(serverResultUtils, forwardedHeaderHandler)
-      ReloadCacheValues(
-        resultUtils = serverResultUtils,
-        modelConversion = modelConversion,
-        serverDebugInfo = reloadDebugInfo(tryApp, ArmeriaServer.provider)
-      )
+      val oldClassLoader = Thread.currentThread().getContextClassLoader
+      try {
+        Thread.currentThread().setContextClassLoader(PlayHttpService.getClass.getClassLoader)
+        val serverResultUtils      = reloadServerResultUtils(tryApp)
+        val forwardedHeaderHandler = reloadForwardedHeaderHandler(tryApp)
+        val modelConversion        = new ArmeriaModelConversion(serverResultUtils, forwardedHeaderHandler)
+        ReloadCacheValues(
+          resultUtils = serverResultUtils,
+          modelConversion = modelConversion,
+          serverDebugInfo = reloadDebugInfo(tryApp, ArmeriaServer.provider)
+        )
+      } finally {
+        Thread.currentThread().setContextClassLoader(oldClassLoader)
+      }
     }
   }
 
