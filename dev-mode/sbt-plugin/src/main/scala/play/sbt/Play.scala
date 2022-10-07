@@ -116,3 +116,13 @@ object PlayAkkaHttp2Support extends AutoPlugin {
     libraryDependencies += "com.typesafe.play" %% "play-akka-http2-support" % PlayVersion.current,
   )
 }
+
+/**
+ * This plugin enables the Play netty http server
+ */
+object PlayArmeriaServer extends AutoPlugin {
+  override def requires = PlayService
+  override def projectSettings = Seq(
+    libraryDependencies ++= (if (PlayKeys.playPlugin.value) Nil else Seq(PlayImport.armeriaServer))
+  )
+}

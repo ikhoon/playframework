@@ -300,8 +300,6 @@ lazy val PlayFiltersHelpersProject = PlayCrossBuiltProject("Filters-Helpers", "w
     PlayAkkaHttpServerProject % "test" // Because we need a server provider when running the tests
   )
 
-logLevel in Scope.Global := Level.Debug
-
 lazy val PlayIntegrationTestProject = PlayCrossBuiltProject("Play-Integration-Test", "core/play-integration-test")
 // This project is just for testing Play, not really a public artifact
   .settings(disablePublishing)
@@ -353,9 +351,9 @@ lazy val PlayMicrobenchmarkProject = PlayCrossBuiltProject("Play-Microbenchmark"
     mimaPreviousArtifacts := Set.empty
   )
   .dependsOn(
-    PlayProject % "test->test",
-    PlayLogback % "test->test",
-//    PlayIntegrationTestProject % "test->test",
+    PlayProject                % "test->test",
+    PlayLogback                % "test->test",
+    PlayIntegrationTestProject % "test->it",
     PlayAhcWsProject,
     PlaySpecs2Project,
     PlayFiltersHelpersProject,
@@ -427,6 +425,7 @@ lazy val userProjects = Seq[ProjectReference](
   RoutesCompilerProject,
   PlayAkkaHttpServerProject,
   PlayAkkaHttp2SupportProject,
+  PlayArmeriaServerProject,
   PlayCacheProject,
   PlayEhcacheProject,
   PlayCaffeineCacheProject,

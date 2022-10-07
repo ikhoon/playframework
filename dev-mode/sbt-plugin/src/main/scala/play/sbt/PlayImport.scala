@@ -28,6 +28,8 @@ object PlayImport {
 
   val akkaHttpServer = component("play-akka-http-server")
 
+  val armeriaServer = component("play-armeria-server")
+
   val logback = component("play-logback")
 
   val evolutions = component("play-jdbc-evolutions")
