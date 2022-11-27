@@ -16,11 +16,13 @@ import play.api.test.WsTestClient
 import play.core.j.JavaHandler
 import play.core.j.JavaHandlerComponents
 import play.it.AkkaHttpIntegrationSpecification
+import play.it.ArmeriaIntegrationSpecification
 import play.it.NettyIntegrationSpecification
 import play.it.ServerIntegrationSpecification
 
-class NettyJavaHttpHandlerSpec extends JavaHttpHandlerSpec with NettyIntegrationSpecification
-class AkkaJavaHttpHandlerSpec  extends JavaHttpHandlerSpec with AkkaHttpIntegrationSpecification
+class NettyJavaHttpHandlerSpec   extends JavaHttpHandlerSpec with NettyIntegrationSpecification
+class AkkaJavaHttpHandlerSpec    extends JavaHttpHandlerSpec with AkkaHttpIntegrationSpecification
+class ArmeriaJavaHttpHandlerSpec extends JavaHttpHandlerSpec with ArmeriaIntegrationSpecification
 
 trait JavaHttpHandlerSpec extends PlaySpecification with WsTestClient with ServerIntegrationSpecification {
   def handlerResponse[T](handler: Handler)(block: WSResponse => T): T = {

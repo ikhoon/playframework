@@ -25,16 +25,17 @@ import play.core.server.common.ServerDebugInfo
 import play.core.server.ServerConfig
 import play.core.server.ServerProvider
 import play.it.AkkaHttpIntegrationSpecification
+import play.it.ArmeriaIntegrationSpecification
 import play.it.NettyIntegrationSpecification
 import play.it.ServerIntegrationSpecification
-
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-class NettyServerReloadingSpec extends ServerReloadingSpec with NettyIntegrationSpecification
-class AkkaServerReloadingSpec  extends ServerReloadingSpec with AkkaHttpIntegrationSpecification
+class NettyServerReloadingSpec   extends ServerReloadingSpec with NettyIntegrationSpecification
+class AkkaServerReloadingSpec    extends ServerReloadingSpec with AkkaHttpIntegrationSpecification
+class ArmeriaServerReloadingSpec extends ServerReloadingSpec with ArmeriaIntegrationSpecification
 
 trait ServerReloadingSpec extends PlaySpecification with WsTestClient with ServerIntegrationSpecification {
   class TestApplicationProvider extends ApplicationProvider {
@@ -72,7 +73,8 @@ trait ServerReloadingSpec extends PlaySpecification with WsTestClient with Serve
       // Test for https://github.com/playframework/playframework/issues/7533
 
       val testAppProvider = new TestApplicationProvider
-      withApplicationProvider(testAppProvider) { implicit port: Port => // First we make a request to the server. This tries to load the application
+      withApplicationProvider(testAppProvider) { implicit port: Port =>
+        // First we make a request to the server. This tries to load the application
         // but fails because we set our TestApplicationProvider to contain a Failure
         // instead of an Application. The server can't load the Application configuration
         // yet, so it loads some default flash configuration.

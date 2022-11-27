@@ -12,6 +12,7 @@ import play.api.test._
 
 class NettyExpect100ContinueSpec    extends Expect100ContinueSpec with NettyIntegrationSpecification
 class AkkaHttpExpect100ContinueSpec extends Expect100ContinueSpec with AkkaHttpIntegrationSpecification
+class ArmeriaExpect100ContinueSpec extends Expect100ContinueSpec with ArmeriaIntegrationSpecification
 
 trait Expect100ContinueSpec extends PlaySpecification with ServerIntegrationSpecification {
   "Play" should {
@@ -49,7 +50,8 @@ trait Expect100ContinueSpec extends PlaySpecification with ServerIntegrationSpec
       )
       responses.length must_== 1
       responses(0).status must_== 200
-    }
+      // Armeria automatically return a `100 Continue` response if "Expect: 100-continue" header is set.
+    }.skipUntilArmeriaFixed
 
     // This is necessary due to an ambiguity in the HTTP spec.  Clients are instructed not to wait indefinitely for
     // the 100 continue response, but rather to just send it anyway if no response is received.  If the body is
@@ -66,7 +68,7 @@ trait Expect100ContinueSpec extends PlaySpecification with ServerIntegrationSpec
       )
       responses.length must_== 1
       responses(0).status must_== 200
-    }
+    }.skipUntilArmeriaFixed
 
     "leave the Netty pipeline in the right state after accepting a 100 continue request" in withServer(
       _(req => Results.Ok)

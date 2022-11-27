@@ -10,13 +10,11 @@ import play.api.libs.ws.WSBodyReadables
 import play.api.libs.ws.WSBodyWritables
 import play.api.libs.oauth._
 import play.api.test.PlaySpecification
-import play.it.AkkaHttpIntegrationSpecification
-import play.it.NettyIntegrationSpecification
-import play.it.ServerIntegrationSpecification
+import play.it.{AkkaHttpIntegrationSpecification, ArmeriaIntegrationSpecification, NettyIntegrationSpecification, ServerIntegrationSpecification}
 
 class NettyScalaWSSpec extends ScalaWSSpec with NettyIntegrationSpecification
-
 class AkkaHttpScalaWSSpec extends ScalaWSSpec with AkkaHttpIntegrationSpecification
+class ArmeriaScalaWSSpec extends ScalaWSSpec with ArmeriaIntegrationSpecification
 
 trait ScalaWSSpec
     extends PlaySpecification
@@ -165,7 +163,12 @@ trait ScalaWSSpec
         }
         "expect title-case header with signed request" in withAuthorizationCheck { ws =>
           val body = await(ws.url("/").sign(customCalc).execute()).body
-          body must_== ("Authorization")
+          this match {
+            case _: ArmeriaScalaWSSpec =>
+              body must_== ("authorization") // Armeria normalizes header names to lowercase
+            case _ =>
+              body must_== ("Authorization")
+          }
         }
       }
 
@@ -173,7 +176,12 @@ trait ScalaWSSpec
       "when sending an explicit header" in {
         "preserve a title-case 'Authorization' header" in withAuthorizationCheck { ws =>
           val body = await(ws.url("/").withHttpHeaders("Authorization" -> "some value").execute()).body
-          body must_== ("Authorization")
+          this match {
+            case _: ArmeriaScalaWSSpec =>
+              body must_== ("authorization") // Armeria normalizes header names to lowercase
+            case _ =>
+              body must_== ("Authorization")
+          }
         }
         "preserve a lower-case 'authorization' header" in withAuthorizationCheck { ws =>
           val body = await(ws.url("/").withHttpHeaders("authorization" -> "some value").execute()).body

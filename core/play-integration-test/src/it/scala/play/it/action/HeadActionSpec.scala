@@ -27,6 +27,7 @@ import scala.concurrent.Future
 
 class NettyHeadActionSpec    extends HeadActionSpec with NettyIntegrationSpecification
 class AkkaHttpHeadActionSpec extends HeadActionSpec with AkkaHttpIntegrationSpecification
+class ArmeriaHeadActionSpec  extends HeadActionSpec with ArmeriaIntegrationSpecification
 
 trait HeadActionSpec
     extends Specification

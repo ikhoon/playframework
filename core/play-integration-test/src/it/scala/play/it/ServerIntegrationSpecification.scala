@@ -50,7 +50,7 @@ trait ServerIntegrationSpecification extends PendingUntilFixed with AroundEach {
      */
     def skipUntilAkkaHttpFixed: Result = parent match {
       case _: AkkaHttpIntegrationSpecification => Skipped()
-      case _ => ResultExecution.execute(AsResult(t))
+      case _                                   => ResultExecution.execute(AsResult(t))
     }
   }
 
@@ -58,12 +58,10 @@ trait ServerIntegrationSpecification extends PendingUntilFixed with AroundEach {
 
     /**
      * We may want to skip some tests if Armeria does not support some features.
-     * For example, Armeria assumes an HTTP/1.x connection is HTTP/1.1. so "Connection: close" aren't sent to
-     * the response headers by default.
      */
     def skipUntilArmeriaFixed: Result = parent match {
       case _: ArmeriaIntegrationSpecification => Skipped()
-      case _ => ResultExecution.execute(AsResult(t))
+      case _                                  => ResultExecution.execute(AsResult(t))
     }
   }
 

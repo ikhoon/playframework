@@ -12,7 +12,7 @@ import play.core.server.armeria.ArmeriaCollectionUtil.toSeq
  * An implementation of Play `Headers` that wraps the raw Armeria headers to
  * avoid additional copies for some common read operations.
  */
-private final class ArmeriaHeadersWrapper(armeriaHeaders: RequestHeaders) extends Headers(null) {
+private final class ArmeriaHeadersWrapper(private val armeriaHeaders: RequestHeaders) extends Headers(null) {
 
   override def headers: Seq[(String, String)] = {
     if (_headers == null) {
@@ -28,6 +28,10 @@ private final class ArmeriaHeadersWrapper(armeriaHeaders: RequestHeaders) extend
     _headers
   }
 
+  override def hasHeader(headerName: String): Boolean = armeriaHeaders.contains(headerName)
+
+  override def hasBody: Boolean = armeriaHeaders.contentLength() != 0
+
   override def get(key: String): Option[String] = Option(armeriaHeaders.get(key))
 
   override def apply(key: String): String = {
@@ -36,4 +40,14 @@ private final class ArmeriaHeadersWrapper(armeriaHeaders: RequestHeaders) extend
   }
 
   override def getAll(key: String): Seq[String] = toSeq(armeriaHeaders.getAll(key))
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: ArmeriaHeadersWrapper => that.armeriaHeaders == this.armeriaHeaders
+      case _                           => false
+    }
+
+  override def toString: String = armeriaHeaders.toString()
+
+  override def hashCode: Int = armeriaHeaders.hashCode()
 }
