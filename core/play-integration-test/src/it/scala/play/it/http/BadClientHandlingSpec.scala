@@ -18,6 +18,8 @@ import scala.util.Random
 
 class NettyBadClientHandlingSpec    extends BadClientHandlingSpec with NettyIntegrationSpecification
 class AkkaHttpBadClientHandlingSpec extends BadClientHandlingSpec with AkkaHttpIntegrationSpecification
+// TODO(ikhoon): Wait for https://github.com/line/armeria/pull/4532 to be merged.
+class ArmeriaBadClientHandlingSpec extends BadClientHandlingSpec with ArmeriaIntegrationSpecification
 
 trait BadClientHandlingSpec extends PlaySpecification with ServerIntegrationSpecification {
   "Play" should {

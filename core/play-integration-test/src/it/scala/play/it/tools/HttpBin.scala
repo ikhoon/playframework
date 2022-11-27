@@ -34,7 +34,8 @@ object HttpBinApplication {
       "origin"  -> r.remoteAddress,
       "url"     -> "",
       "args"    -> r.queryString.view.mapValues(_.head).toMap[String, String],
-      "headers" -> r.headers.toSimpleMap
+      // Remove pseudo-headers for compatibility with HTTP/2
+      "headers" -> r.headers.toSimpleMap.filterNot { case (name, _) => name.startsWith(":")}
     )
   }
 

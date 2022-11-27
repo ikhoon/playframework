@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.TimeUnit
-
 import akka.NotUsed
 import akka.stream.javadsl
 import akka.stream.scaladsl.FileIO
@@ -31,20 +30,17 @@ import play.api.mvc.Results.Ok
 import play.api.test.PlaySpecification
 import play.core.server.Server
 import play.it.tools.HttpBinApplication
-import play.it.AkkaHttpIntegrationSpecification
-import play.it.NettyIntegrationSpecification
-import play.it.ServerIntegrationSpecification
+import play.it.{AkkaHttpIntegrationSpecification, ArmeriaIntegrationSpecification, NettyIntegrationSpecification, ServerIntegrationSpecification}
 import play.libs.ws.WSBodyReadables
 import play.libs.ws.WSBodyWritables
 import play.libs.ws.WSRequest
 import play.libs.ws.WSResponse
 import play.mvc.Http
-
 import scala.concurrent.Future
 
 class NettyJavaWSSpec(val ee: ExecutionEnv) extends JavaWSSpec with NettyIntegrationSpecification
-
 class AkkaHttpJavaWSSpec(val ee: ExecutionEnv) extends JavaWSSpec with AkkaHttpIntegrationSpecification
+class ArmeriaJavaWSSpec(val ee: ExecutionEnv) extends JavaWSSpec with ArmeriaIntegrationSpecification
 
 trait JavaWSSpec
     extends PlaySpecification

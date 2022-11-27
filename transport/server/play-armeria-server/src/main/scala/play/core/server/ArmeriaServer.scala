@@ -11,9 +11,9 @@ import akka.stream.Materializer
 import com.linecorp.armeria.common.Http1HeaderNaming
 import com.linecorp.armeria.common.logging.LogLevel
 import com.linecorp.armeria.server.encoding.DecodingService
-import com.linecorp.armeria.server.logging.LoggingService
+import com.linecorp.armeria.server.logging.{ContentPreviewingService, LoggingService}
 import com.linecorp.armeria.server.ServerBuilder
-import com.linecorp.armeria.server.{ Server => ArmeriaHttpServer }
+import com.linecorp.armeria.server.{Server => ArmeriaHttpServer}
 import com.typesafe.config.ConfigMemorySize
 import io.netty.handler.ssl.ClientAuth
 import java.net.InetSocketAddress
@@ -77,12 +77,15 @@ class ArmeriaServer(
       serverBuilder.https(new InetSocketAddress(config.address, port))
     }
     serverBuilder.decorator(DecodingService.newDecorator())
+
+    // TODO(ikhoon): Remove LoggingService after testing
     serverBuilder.decorator(
       LoggingService
         .builder()
         .newDecorator()
     )
-    serverBuilder.verboseResponses(true)
+    // TODO(ikhoon): Remove after test
+    //    serverBuilder.verboseResponses(true)
 
     serverBuilder.maxRequestLength(maxContentLength)
     serverBuilder.http1MaxHeaderSize(maxHeaderSize)
@@ -107,19 +110,29 @@ class ArmeriaServer(
       customizer.clientAuth(clientAuth)
     })
 
-    applicationProvider.get.map(application => {
-      val configurator =
-        try {
-          application.injector.instanceOf[ArmeriaServerConfigurator]
-        } catch {
-          case NonFatal(_) => null // ignore silently
-        }
+    try {
+      applicationProvider.get.map(application => {
+        val configurator =
+          try {
+            application.injector.instanceOf[ArmeriaServerConfigurator]
+          } catch {
+            case NonFatal(_) => null // ignore silently
+          }
 
-      if (configurator != null) {
-        // Customize serverBuilder with the user-defined configurator
-        configurator.configure(serverBuilder)
-      }
-    })
+        if (configurator != null) {
+          // Customize serverBuilder with the user-defined configurator
+          configurator.configure(serverBuilder)
+        }
+      })
+    } catch {
+      case NonFatal(ex) =>
+        logger.warn(
+          "Failed to load ApplicationProvider to inject ArmeriaServerConfigurator. " +
+            "As ArmeriaServerConfigurator does not support auto-reloading, restart the application " +
+            "after fixing the problem",
+          ex
+        )
+    }
 
     val service = new PlayHttpService(this)
     serverBuilder.serviceUnder("/", service)

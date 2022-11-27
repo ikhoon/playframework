@@ -27,7 +27,6 @@ import play.api.http.HttpEntity
 
 class NettyScalaResultsHandlingSpec    extends ScalaResultsHandlingSpec with NettyIntegrationSpecification
 class AkkaHttpScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with AkkaHttpIntegrationSpecification
-
 class ArmeriaScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with ArmeriaIntegrationSpecification
 
 trait ScalaResultsHandlingSpec

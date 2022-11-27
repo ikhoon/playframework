@@ -20,8 +20,7 @@ import com.linecorp.armeria.common.MediaType
 import com.linecorp.armeria.common.ResponseHeaders
 import com.linecorp.armeria.server.ServiceRequestContext
 import io.netty.buffer.Unpooled
-import java.net.InetAddress
-import java.net.URI
+import java.net.{InetAddress, InetSocketAddress, URI}
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLPeerUnverifiedException
 import org.slf4j.Logger
@@ -77,17 +76,14 @@ private[armeria] final class ArmeriaModelConversion(
    */
   def convertRequestBody(request: HttpRequest): Option[Source[ByteString, Any]] = {
     val contentLength = request.headers().contentLength()
-    if (contentLength == -1 || contentLength > MAX_AGGREGATION_SIZE) {
+    if (contentLength == 0) {
+      None
+    } else {
       val body: StreamMessage[ByteString] =
         request
           .filter(obj => obj.isInstanceOf[HttpData])
           .map(data => ByteString.fromArrayUnsafe(data.asInstanceOf[HttpData].array()))
       Some(Source.fromPublisher(body))
-    } else if (contentLength == 0) {
-      None
-    } else {
-      val future = request.aggregate().thenApply(agg => ByteString.fromArrayUnsafe(agg.content().array()))
-      Some(Source.completionStage(future))
     }
   }
 
@@ -203,7 +199,7 @@ private[armeria] final class ArmeriaModelConversion(
   /** Capture a request's connection info from the request context and headers. */
   private def createRemoteConnection(ctx: ServiceRequestContext, headers: Headers): RemoteConnection = {
     val connection = new RemoteConnection {
-      override def remoteAddress: InetAddress = ctx.remoteAddress()
+      override def remoteAddress: InetAddress = ctx.remoteAddress[InetSocketAddress]().getAddress
 
       override def secure: Boolean = ctx.sessionProtocol().isTls
 

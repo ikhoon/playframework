@@ -34,6 +34,7 @@ import scala.jdk.CollectionConverters._
 
 class NettyJavaResultsHandlingSpec    extends JavaResultsHandlingSpec with NettyIntegrationSpecification
 class AkkaHttpJavaResultsHandlingSpec extends JavaResultsHandlingSpec with AkkaHttpIntegrationSpecification
+class ArmeriaJavaResultsHandlingSpec extends JavaResultsHandlingSpec with ArmeriaIntegrationSpecification
 
 trait JavaResultsHandlingSpec
     extends PlaySpecification

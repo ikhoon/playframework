@@ -27,8 +27,9 @@ import scala.concurrent.ExecutionContext.{ global => ec }
 import scala.concurrent._
 import scala.concurrent.duration.Duration
 
-class NettyDefaultFiltersSpec    extends DefaultFiltersSpec with NettyIntegrationSpecification
-class AkkaDefaultHttpFiltersSpec extends DefaultFiltersSpec with AkkaHttpIntegrationSpecification
+class NettyDefaultFiltersSpec       extends DefaultFiltersSpec with NettyIntegrationSpecification
+class AkkaDefaultHttpFiltersSpec    extends DefaultFiltersSpec with AkkaHttpIntegrationSpecification
+class ArmeriaDefaultHttpFiltersSpec extends DefaultFiltersSpec with ArmeriaIntegrationSpecification
 
 trait DefaultFiltersSpec extends FiltersSpec {
   // Easy to use `withServer` method
