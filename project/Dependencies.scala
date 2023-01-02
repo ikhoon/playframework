@@ -179,7 +179,7 @@ object Dependencies {
 
   val akkaHttp2Support = "com.typesafe.akka" %% "akka-http2-support" % akkaHttpVersion
 
-  val armeria = "com.linecorp.armeria" % "armeria" % "1.20.1"
+  val armeria = "com.linecorp.armeria" % "armeria" % "1.21.0"
 
   val cookieEncodingDependencies = slf4j
 
