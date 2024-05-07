@@ -21,7 +21,8 @@
     <logger name="org.hibernate.validator" level="WARN" />
     <logger name="akka" level="WARN" />
     <logger name="org.jboss.logging" level="WARN" />
-    <logger name="com.linecorp.armeria" level="WARN" />
+    <!-- TODO(ikhoon) Revert to warn -->
+    <logger name="com.linecorp.armeria" level="DEBUG" />
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />

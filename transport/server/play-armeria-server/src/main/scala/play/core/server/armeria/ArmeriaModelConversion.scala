@@ -40,6 +40,7 @@ import play.api.mvc.RequestHeader
 import play.api.mvc.RequestHeaderImpl
 import play.api.mvc.Result
 import play.core.server.armeria.ArmeriaCollectionUtil.toSeq
+import play.core.server.armeria.ArmeriaModelConversion.MAX_AGGREGATION_SIZE
 import play.core.server.armeria.ArmeriaModelConversion.logger
 import play.core.server.common.ForwardedHeaderHandler
 import play.core.server.common.ServerResultUtils
@@ -97,6 +98,7 @@ private[armeria] final class ArmeriaModelConversion(
         case None         => HttpStatus.valueOf(result.header.status)
       }
 
+      val skipEntity     = requestHeader.method == HttpMethod.HEAD.name()
       val headers        = resultUtils.splitSetCookieHeaders(result.header.headers)
       val headersBuilder = ResponseHeaders.builder(status)
 
@@ -140,6 +142,10 @@ private[armeria] final class ArmeriaModelConversion(
       // TODO(ikhoon): Add Date and Server headers.
 
       val response: HttpResponse = result.body match {
+        case any if skipEntity =>
+          resultUtils.cancelEntity(any)
+          HttpResponse.of(headersBuilder.build())
+
         case HttpEntity.Strict(data, _) =>
           if (data.isEmpty) {
             HttpResponse.of(headersBuilder.build())
@@ -149,6 +155,7 @@ private[armeria] final class ArmeriaModelConversion(
 
         case HttpEntity.Streamed(stream, _, _) =>
           val publisher = stream.map(toHttpData).runWith(Sink.asPublisher(false))
+          // Use contentLenghUnknown
           if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
             headersBuilder.set(HttpHeaderNames.CONTENT_LENGTH, "-1");
           }
@@ -252,4 +259,11 @@ private[armeria] final class ArmeriaModelConversion(
 private object ArmeriaModelConversion {
 
   private val logger: Logger = LoggerFactory.getLogger(classOf[ArmeriaModelConversion])
+
+  /**
+   * Aggregate the request or response less 8096.
+   * TODO(ikhoon): Make this value customized
+   */
+  private val MAX_AGGREGATION_SIZE = 8096
+
 }

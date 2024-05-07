@@ -19,6 +19,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class NettyHttpPipeliningSpec    extends HttpPipeliningSpec with NettyIntegrationSpecification
 class AkkaHttpHttpPipeliningSpec extends HttpPipeliningSpec with AkkaHttpIntegrationSpecification
+// TODO(ikhoon): Wait until Armeria fixes the HTTP pipelining bug
 class ArmeriaHttpPipeliningSpec  extends HttpPipeliningSpec with ArmeriaIntegrationSpecification
 
 trait HttpPipeliningSpec extends PlaySpecification with ServerIntegrationSpecification {

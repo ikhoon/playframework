@@ -50,6 +50,7 @@ class ArmeriaServer(
   private val armeriaConfig     = serverConfig.get[Configuration]("armeria")
   private val maxContentLength    = Server.getPossiblyInfiniteBytes(serverConfig.underlying, "max-content-length")
   private val maxInitialLineLength = armeriaConfig.get[Int]("maxInitialLineLength")
+  private val maxContentLength    = Server.getPossiblyInfiniteBytes(serverConfig.underlying, "max-content-length")
   private val maxHeaderSize       = serverConfig.get[ConfigMemorySize]("max-header-size").toBytes.toInt
   private val httpsWantClientAuth = serverConfig.get[Boolean]("https.wantClientAuth")
   private val httpsNeedClientAuth = serverConfig.get[Boolean]("https.needClientAuth")

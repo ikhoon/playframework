@@ -104,7 +104,14 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
         // an empty body implies no parsing is used and no content type is derived from the body.
         BasicRequest("GET", "/", "HTTP/1.1", Map(headerName -> headerValue), "")
       )
-      response.body must beLeft(headerName)
+      this match {
+        case _: ArmeriaRequestHeadersSpec =>
+          // Armeria internally converts header names to lowercase to support HTTP/2 requirements
+          // while also not violating HTTP/1 requirements.
+          response.body.left.map(_.toLowerCase()) must beLeft(headerName.toLowerCase())
+        case _ =>
+          response.body must beLeft(headerName)
+      }
     }
   }
 
@@ -192,6 +199,7 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           )
         )
         response.body must beLeft(
+          // TODO(ikhoon): Drop content-encoding
           "Content-Encoding -> None, " +
             "Authorization -> Some(Bearer 123), " +
             "X-Custom-Header -> Some(123)"
