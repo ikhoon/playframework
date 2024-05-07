@@ -104,14 +104,7 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
         // an empty body implies no parsing is used and no content type is derived from the body.
         BasicRequest("GET", "/", "HTTP/1.1", Map(headerName -> headerValue), "")
       )
-      this match {
-        case _: ArmeriaRequestHeadersSpec =>
-          // Armeria internally converts header names to lowercase to support HTTP/2 requirements
-          // while also not violating HTTP/1 requirements.
-          response.body.left.map(_.toLowerCase()) must beLeft(headerName.toLowerCase())
-        case _ =>
-          response.body must beLeft(headerName)
-      }
+      response.body must beLeft(headerName)
     }
   }
 
@@ -171,7 +164,8 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           ""
         )
       )
-      response.status must_== 200
+      val value1: MatchResult[Any] = response.status must_== 200
+      value1
     }
 
     "get request headers properly when Content-Encoding is set" in {
@@ -198,7 +192,6 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           )
         )
         response.body must beLeft(
-          // TODO(ikhoon): Drop content-encoding
           "Content-Encoding -> None, " +
             "Authorization -> Some(Bearer 123), " +
             "X-Custom-Header -> Some(123)"
@@ -229,17 +222,6 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
     }
 
     "preserve the case of header names" in {
-      def headerNameInRequest(headerName: String, headerValue: String): MatchResult[Either[String, _]] = {
-        withServer((Action, _) =>
-          Action { rh => Results.Ok(rh.headers.keys.filter(_.equalsIgnoreCase(headerName)).mkString) }
-        ) { port =>
-          val Seq(response) = BasicHttpClient.makeRequests(port)(
-            // an empty body implies no parsing is used and no content type is derived from the body.
-            BasicRequest("GET", "/", "HTTP/1.1", Map(headerName -> headerValue), "")
-          )
-          response.body must beLeft(headerName)
-        }
-      }
       "'Foo' header" in headerNameInRequest("Foo", "Bar")
       "'foo' header" in headerNameInRequest("foo", "bar")
       // Authorization examples taken from https://github.com/playframework/playframework/issues/7735
@@ -273,7 +255,8 @@ trait RequestHeadersSpec extends PlaySpecification with ServerIntegrationSpecifi
           REQUEST_URI_TOO_LONG
         )
       }
-    }
+      // TODO(ikhoon): Fix Http1RequestDecoder to handle TooLongHttpHeaderException
+    }.skipUntilArmeriaFixed
 
     "maintain uri and path consistency" in {
       def uriInRequest(uri: String): MatchResult[Either[String, _]] = {

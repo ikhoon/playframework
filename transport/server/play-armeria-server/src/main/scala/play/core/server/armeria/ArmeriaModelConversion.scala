@@ -20,6 +20,7 @@ import com.linecorp.armeria.common.MediaType
 import com.linecorp.armeria.common.ResponseHeaders
 import com.linecorp.armeria.server.ServiceRequestContext
 import io.netty.buffer.Unpooled
+import io.netty.handler.codec.http.HttpHeaderValues
 import java.net.{InetAddress, InetSocketAddress, URI}
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -39,7 +40,6 @@ import play.api.mvc.RequestHeader
 import play.api.mvc.RequestHeaderImpl
 import play.api.mvc.Result
 import play.core.server.armeria.ArmeriaCollectionUtil.toSeq
-import play.core.server.armeria.ArmeriaModelConversion.MAX_AGGREGATION_SIZE
 import play.core.server.armeria.ArmeriaModelConversion.logger
 import play.core.server.common.ForwardedHeaderHandler
 import play.core.server.common.ServerResultUtils
@@ -97,7 +97,6 @@ private[armeria] final class ArmeriaModelConversion(
         case None         => HttpStatus.valueOf(result.header.status)
       }
 
-      val skipEntity     = requestHeader.method == HttpMethod.HEAD.name()
       val headers        = resultUtils.splitSetCookieHeaders(result.header.headers)
       val headersBuilder = ResponseHeaders.builder(status)
 
@@ -141,15 +140,18 @@ private[armeria] final class ArmeriaModelConversion(
       // TODO(ikhoon): Add Date and Server headers.
 
       val response: HttpResponse = result.body match {
-        case any if skipEntity =>
-          resultUtils.cancelEntity(any)
-          HttpResponse.of(headersBuilder.build())
-
         case HttpEntity.Strict(data, _) =>
-          HttpResponse.of(headersBuilder.build(), toHttpData(data))
+          if (data.isEmpty) {
+            HttpResponse.of(headersBuilder.build())
+          } else {
+            HttpResponse.of(headersBuilder.build(), toHttpData(data))
+          }
 
         case HttpEntity.Streamed(stream, _, _) =>
           val publisher = stream.map(toHttpData).runWith(Sink.asPublisher(false))
+          if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
+            headersBuilder.set(HttpHeaderNames.CONTENT_LENGTH, "-1");
+          }
           HttpResponse.of(headersBuilder.build(), publisher)
 
         case HttpEntity.Chunked(chunks, _) =>
@@ -166,12 +168,16 @@ private[armeria] final class ArmeriaModelConversion(
                 }
             }
             .runWith(Sink.asPublisher(false))
+//          if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
+//            headersBuilder.set(HttpHeaderNames.CONTENT_LENGTH, "-1");
+//          }
+          headersBuilder.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED.toString())
           HttpResponse.of(headersBuilder.build(), publisher)
       }
       Future.successful(response)
     } {
       // TODO(ikhoon): Add Date and Server headers.
-      HttpResponse.of(HttpStatus.INTERNAL_SERVER_ERROR)
+      HttpResponse.of(ResponseHeaders.of(HttpStatus.INTERNAL_SERVER_ERROR))
     }
   }
 
@@ -246,11 +252,4 @@ private[armeria] final class ArmeriaModelConversion(
 private object ArmeriaModelConversion {
 
   private val logger: Logger = LoggerFactory.getLogger(classOf[ArmeriaModelConversion])
-
-  /**
-   * Aggregate the request or response less 8096.
-   * TODO(ikhoon): Make this value customized
-   */
-  private val MAX_AGGREGATION_SIZE = 8096
-
 }

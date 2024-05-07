@@ -141,15 +141,14 @@ trait RequestBodyHandlingSpec extends PlaySpecification with ServerIntegrationSp
         )
         responses.length must_== 1
         responses(0).status must_== 413
-        val expectedBody = this match {
-          case body: ArmeriaRequestBodyHandlingSpec =>
-            // Armeria limits the max request length at the HTTP decoder level so Action can't handle the request.
-            "Status: 413\nDescription: Request Entity Too Large\n"
-          case _ =>
+        this.isArmeriaServer()
+        val expectedBody = if (isArmeriaServer()) {
+          // Armeria limits the max request length at the HTTP decoder level so Action can't handle the request.
+          "Status: 413\nDescription: Request Entity Too Large\n"
+        } else {
             "Origin: server-backend / Request Entity Too Large"
         }
         responses(0).body.left.getOrElse("") must_=== expectedBody
-        responses(0).body.left.getOrElse("") must_=== "Origin: server-backend / Request Entity Too Large"
     }
 
     "handle a big http request with exact amount of allowed Content-Length" in withServerAndConfig(

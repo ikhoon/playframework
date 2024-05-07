@@ -47,13 +47,14 @@ class ArmeriaServer(
 ) extends Server {
 
   private val serverConfig        = config.configuration.get[Configuration]("play.server")
+  private val armeriaConfig     = serverConfig.get[Configuration]("armeria")
   private val maxContentLength    = Server.getPossiblyInfiniteBytes(serverConfig.underlying, "max-content-length")
+  private val maxInitialLineLength = armeriaConfig.get[Int]("maxInitialLineLength")
   private val maxHeaderSize       = serverConfig.get[ConfigMemorySize]("max-header-size").toBytes.toInt
   private val httpsWantClientAuth = serverConfig.get[Boolean]("https.wantClientAuth")
   private val httpsNeedClientAuth = serverConfig.get[Boolean]("https.needClientAuth")
   private val httpIdleTimeout     = serverConfig.get[Duration]("http.idleTimeout")
 
-  private val armeriaConfig     = serverConfig.get[Configuration]("armeria")
   private val http1HeaderNaming = armeriaConfig.get[String]("http1HeaderNaming")
   if (http1HeaderNaming != "tradition" && http1HeaderNaming != "lowercase") {
     logger.warn(s"""Unexpected `play.server.armeria.http1HeaderNaming` [$http1HeaderNaming] is 
@@ -88,6 +89,7 @@ class ArmeriaServer(
     //    serverBuilder.verboseResponses(true)
 
     serverBuilder.maxRequestLength(maxContentLength)
+    serverBuilder.http1MaxInitialLineLength(maxInitialLineLength)
     serverBuilder.http1MaxHeaderSize(maxHeaderSize)
     serverBuilder.http2MaxHeaderListSize(maxHeaderSize)
     serverBuilder.idleTimeoutMillis(httpIdleTimeout.toMillis)
@@ -228,7 +230,10 @@ class ArmeriaServer(
     }
 
     coordinatedShutdown.addTask(CoordinatedShutdown.PhaseServiceUnbind, "armeria-server-unbind") { () =>
-      server.stop().asScala.map(_ => Done)
+      // TODO(ikhoon): Revert before sending a PR
+//      server.stop().asScala.map(_ => Done)
+      server.stop()
+      Future.successful(Done)
     }
 
     // Call provided hook

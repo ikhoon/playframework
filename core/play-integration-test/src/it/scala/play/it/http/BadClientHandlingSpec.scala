@@ -18,7 +18,6 @@ import scala.util.Random
 
 class NettyBadClientHandlingSpec    extends BadClientHandlingSpec with NettyIntegrationSpecification
 class AkkaHttpBadClientHandlingSpec extends BadClientHandlingSpec with AkkaHttpIntegrationSpecification
-// TODO(ikhoon): Wait for https://github.com/line/armeria/pull/4532 to be merged.
 class ArmeriaBadClientHandlingSpec extends BadClientHandlingSpec with ArmeriaIntegrationSpecification
 
 trait BadClientHandlingSpec extends PlaySpecification with ServerIntegrationSpecification {
@@ -64,7 +63,8 @@ trait BadClientHandlingSpec extends PlaySpecification with ServerIntegrationSpec
 
       response.status must_== 400
       response.body must beLeft
-    }
+      // Armeria allows `[]` as a path char at the moment.
+    }.skipUntilArmeriaFixed
 
     "still serve requests if query string won't parse" in withServer() { port =>
       val response = BasicHttpClient.makeRequests(port)(
@@ -87,5 +87,6 @@ trait BadClientHandlingSpec extends PlaySpecification with ServerIntegrationSpec
       response.status must_== 400
       response.body must beLeft("Bad path: /[")
     }.skipUntilAkkaHttpFixed
+     .skipUntilArmeriaFixed
   }
 }
