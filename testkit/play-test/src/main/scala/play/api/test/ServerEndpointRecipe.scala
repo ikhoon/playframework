@@ -4,8 +4,10 @@
 
 package play.api.test
 
-import akka.annotation.ApiMayChange
+import scala.jdk.CollectionConverters._
+
 import com.typesafe.config.ConfigFactory
+import org.apache.pekko.annotation.ApiMayChange
 import play.api.Application
 import play.api.Configuration
 import play.core.server.SelfSigned
@@ -14,8 +16,6 @@ import play.core.server.ServerConfig
 import play.core.server.ServerEndpoint
 import play.core.server.ServerEndpoints
 import play.core.server.ServerProvider
-
-import scala.jdk.CollectionConverters._
 
 /**
  * A recipe for making a [[ServerEndpoint]]. Recipes are often used
@@ -141,7 +141,7 @@ import scala.jdk.CollectionConverters._
     )
   }
 
-  def withDescription(newDescription: String) =
+  def withDescription(newDescription: String): ServerEndpointRecipe =
     new HttpsServerEndpointRecipe(
       newDescription,
       serverProvider,
@@ -150,7 +150,7 @@ import scala.jdk.CollectionConverters._
       expectedServerAttr
     )
 
-  def withServerProvider(newProvider: ServerProvider) =
+  def withServerProvider(newProvider: ServerProvider): ServerEndpointRecipe =
     new HttpsServerEndpointRecipe(
       description,
       newProvider,

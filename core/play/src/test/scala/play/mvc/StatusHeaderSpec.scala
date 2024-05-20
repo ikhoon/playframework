@@ -6,22 +6,22 @@ package play.mvc
 
 import java.util.Optional
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.testkit.TestKit
-import akka.util.ByteString
+import scala.concurrent.duration.Duration
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+
 import com.fasterxml.jackson.core.io.CharacterEscapes
 import com.fasterxml.jackson.core.io.SerializedString
 import com.fasterxml.jackson.core.JsonEncoding
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.testkit.TestKit
+import org.apache.pekko.util.ByteString
 import org.specs2.mutable.SpecificationLike
 import org.specs2.specification.BeforeAfterAll
 import play.libs.Json
 import play.mvc.Http.HeaderNames
-
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
 
 class StatusHeaderSpec extends TestKit(ActorSystem("StatusHeaderSpec")) with SpecificationLike with BeforeAfterAll {
   override def beforeAll(): Unit = {}
@@ -36,7 +36,7 @@ class StatusHeaderSpec extends TestKit(ActorSystem("StatusHeaderSpec")) with Spe
       val materializer = Materializer.matFromSystem
 
       Json.mapper.getFactory.setCharacterEscapes(new CharacterEscapes {
-        override def getEscapeSequence(ch: Int) = new SerializedString(f"\\u$ch%04x")
+        override def getEscapeSequence(ch: Int): SerializedString = new SerializedString(f"\\u$ch%04x")
 
         override def getEscapeCodesForAscii: Array[Int] =
           CharacterEscapes.standardAsciiEscapesForJSON.zipWithIndex.map {
@@ -52,9 +52,12 @@ class StatusHeaderSpec extends TestKit(ActorSystem("StatusHeaderSpec")) with Spe
       val statusHeader = new StatusHeader(Http.Status.OK)
       val result       = statusHeader.sendJson(jsonNode, JsonEncoding.UTF8)
 
-      val content = Await.result(for {
-        byteString <- result.body.dataStream.runWith(Sink.head[ByteString], materializer)
-      } yield byteString.decodeString("UTF-8"), Duration.Inf)
+      val content = Await.result(
+        for {
+          byteString <- result.body.dataStream.runWith(Sink.head[ByteString], materializer)
+        } yield byteString.decodeString("UTF-8"),
+        Duration.Inf
+      )
 
       content must_== "{\"field\":\"value\\u0026\"}"
       result.contentType() must_== Optional.of("application/json")

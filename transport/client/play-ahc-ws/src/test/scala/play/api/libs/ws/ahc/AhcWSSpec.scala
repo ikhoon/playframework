@@ -4,17 +4,22 @@
 
 package play.api.libs.ws.ahc
 
-import java.util
 import java.nio.charset.StandardCharsets
+import java.util
 
-import akka.stream.Materializer
-import akka.util.ByteString
-import akka.util.Timeout
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.language.implicitConversions
+
+import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.util.Timeout
+import org.mockito.Mockito
 import org.specs2.concurrent.ExecutionEnv
 import org.specs2.matcher.FutureMatchers
-import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
-import play.api.Application
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.oauth.ConsumerKey
 import play.api.libs.oauth.OAuthCalculator
@@ -25,21 +30,17 @@ import play.api.test.DefaultAwaitTimeout
 import play.api.test.FutureAwaits
 import play.api.test.Helpers
 import play.api.test.WithServer
-import play.shaded.ahc.io.netty.handler.codec.http.DefaultHttpHeaders
-import play.shaded.ahc.org.asynchttpclient.Realm.AuthScheme
+import play.api.Application
 import play.shaded.ahc.io.netty.handler.codec.http.cookie.{ Cookie => NettyCookie }
 import play.shaded.ahc.io.netty.handler.codec.http.cookie.{ DefaultCookie => NettyDefaultCookie }
-import play.shaded.ahc.org.asynchttpclient.Param
+import play.shaded.ahc.io.netty.handler.codec.http.DefaultHttpHeaders
 import play.shaded.ahc.org.asynchttpclient.{ Request => AHCRequest }
 import play.shaded.ahc.org.asynchttpclient.{ Response => AHCResponse }
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.language.implicitConversions
+import play.shaded.ahc.org.asynchttpclient.Param
+import play.shaded.ahc.org.asynchttpclient.Realm.AuthScheme
 
 class AhcWSSpec(implicit ee: ExecutionEnv)
     extends Specification
-    with Mockito
     with FutureMatchers
     with FutureAwaits
     with DefaultAwaitTimeout {
@@ -71,7 +72,7 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
   }
 
   def makeAhcRequest(url: String): AhcWSRequest = {
-    implicit val materializer = mock[Materializer]
+    implicit val materializer = Mockito.mock(classOf[Materializer])
 
     val client     = StandaloneAhcWSClient(AhcWSClientConfig())
     val standalone = StandaloneAhcWSRequest(client, url)
@@ -95,7 +96,7 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
       .asInstanceOf[AhcWSRequest]
       .underlying
       .buildRequest()
-    new String(req.getByteData, StandardCharsets.UTF_8) must_== ("param1=value1")
+    new String(req.getByteData, StandardCharsets.UTF_8) must_== "param1=value1"
   }
 
   "Have form body on POST of content type text/plain" in {
@@ -126,7 +127,7 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
     val calc = new play.shaded.ahc.org.asynchttpclient.SignatureCalculator with WSSignatureCalculator {
       override def calculateAndAddSignature(
           request: play.shaded.ahc.org.asynchttpclient.Request,
-          requestBuilder: play.shaded.ahc.org.asynchttpclient.RequestBuilderBase[_]
+          requestBuilder: play.shaded.ahc.org.asynchttpclient.RequestBuilderBase[?]
       ): Unit = {
         called = true
       }
@@ -172,7 +173,7 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
     new String(req.getByteData, StandardCharsets.UTF_8) must be_==("param1=value1") // should result in byte data.
 
     val headers = req.getHeaders
-    headers.get("Content-Length") must_== ("9001")
+    headers.get("Content-Length") must_== "9001"
   }
 
   "Remove a user defined content length header if we are parsing body explicitly when signed" in {
@@ -361,17 +362,19 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
   }
 
   "support patch method" in new WithServer(patchFakeApp) {
-    // NOTE: if you are using a client proxy like Privoxy or Polipo, your proxy may not support PATCH & return 400.
-    {
-      val wsClient       = app.injector.instanceOf(classOf[play.api.libs.ws.WSClient])
-      val futureResponse = wsClient.url(s"http://localhost:${Helpers.testServerPort}/").patch("body")
+    override def running() = {
+      // NOTE: if you are using a client proxy like Privoxy or Polipo, your proxy may not support PATCH & return 400.
+      {
+        val wsClient       = app.injector.instanceOf(classOf[play.api.libs.ws.WSClient])
+        val futureResponse = wsClient.url(s"http://localhost:${port}/").patch("body")
 
-      // This test experiences CI timeouts. Give it more time.
-      val reallyLongTimeout = Timeout(defaultAwaitTimeout.duration * 3)
-      val rep               = await(futureResponse)(reallyLongTimeout)
+        // This test experiences CI timeouts. Give it more time.
+        val reallyLongTimeout = Timeout(defaultAwaitTimeout.duration * 3)
+        val rep               = await(futureResponse)(reallyLongTimeout)
 
-      rep.status must ===(200)
-      (rep.json \ "data").asOpt[String] must beSome("body")
+        rep.status must ===(200)
+        (rep.json \ "data").asOpt[String] must beSome("body")
+      }
     }
   }
 
@@ -406,20 +409,67 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
   }
 
   "support gziped encoding" in new WithServer(gzipFakeApp) {
-    val client = app.injector.instanceOf[WSClient]
-    val req    = client.url("http://localhost:" + port + "/").get()
-    val rep    = Await.result(req, 1.second)
-    rep.body must ===("gziped response")
+    override def running() = {
+      val client = app.injector.instanceOf[WSClient]
+      val req    = client.url("http://localhost:" + port + "/").get()
+      val rep    = Await.result(req, 1.second)
+      rep.body[String] must ===("gziped response")
+    }
+  }
+
+  def multipartFormDataFakeApp = {
+    val routes: (Application) => PartialFunction[(String, String), Handler] = { (app: Application) =>
+      {
+        case ("POST", "/") =>
+          val action = app.injector.instanceOf(classOf[DefaultActionBuilder])
+          action { request =>
+            Results.Ok(
+              request.body.asMultipartFormData
+                .map(mpf => {
+                  "dataPart name: " + mpf.dataParts.keys.mkString(",") + "\n" +
+                    "filePart names: " + mpf.files.map(_.key).mkString(",") + "\n" +
+                    "filePart filenames: " + mpf.files.map(_.filename).mkString(",")
+                })
+                .getOrElse("")
+            )
+          }
+      }
+    }
+
+    GuiceApplicationBuilder().appRoutes(routes).build()
+  }
+
+  "escape 'name' and 'filename' params of a multipart form body" in new WithServer(multipartFormDataFakeApp) {
+    override def running() = {
+      {
+        val wsClient = app.injector.instanceOf(classOf[play.api.libs.ws.WSClient])
+        val file     = new java.io.File(this.getClass.getResource("/testassets/foo.txt").toURI)
+        val dp       = MultipartFormData.DataPart("h\"e\rl\nl\"o\rwo\nrld", "world")
+        val fp =
+          MultipartFormData.FilePart("u\"p\rl\no\"a\rd", "f\"o\ro\n_\"b\ra\nr.txt", None, FileIO.fromPath(file.toPath))
+        val source         = Source(List(dp, fp))
+        val futureResponse = wsClient.url(s"http://localhost:${port}/").post(source)
+
+        // This test could experience CI timeouts. Give it more time.
+        val reallyLongTimeout = Timeout(defaultAwaitTimeout.duration * 3)
+        val rep               = await(futureResponse)(reallyLongTimeout)
+
+        rep.status must ===(200)
+        rep.body[String] must be_==("""dataPart name: h%22e%0Dl%0Al%22o%0Dwo%0Arld
+                                      |filePart names: u%22p%0Dl%0Ao%22a%0Dd
+                                      |filePart filenames: f%22o%0Do%0A_%22b%0Da%0Ar.txt""".stripMargin)
+      }
+    }
   }
 
   "Ahc WS Response" should {
     "get cookies from an AHC response" in {
-      val ahcResponse: AHCResponse = mock[AHCResponse]
+      val ahcResponse: AHCResponse = Mockito.mock(classOf[AHCResponse])
       val (name, value, wrap, domain, path, maxAge, secure, httpOnly) =
         ("someName", "someValue", true, "example.com", "/", 1000L, false, false)
 
       val ahcCookie = createCookie(name, value, wrap, domain, path, maxAge, secure, httpOnly)
-      ahcResponse.getCookies.returns(util.Arrays.asList(ahcCookie))
+      Mockito.when(ahcResponse.getCookies).thenReturn(util.Arrays.asList(ahcCookie))
 
       val response = makeAhcResponse(ahcResponse)
 
@@ -435,12 +485,12 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
     }
 
     "get a single cookie from an AHC response" in {
-      val ahcResponse: AHCResponse = mock[AHCResponse]
+      val ahcResponse: AHCResponse = Mockito.mock(classOf[AHCResponse])
       val (name, value, wrap, domain, path, maxAge, secure, httpOnly) =
         ("someName", "someValue", true, "example.com", "/", 1000L, false, false)
 
       val ahcCookie = createCookie(name, value, wrap, domain, path, maxAge, secure, httpOnly)
-      ahcResponse.getCookies.returns(util.Arrays.asList(ahcCookie))
+      Mockito.when(ahcResponse.getCookies).thenReturn(util.Arrays.asList(ahcCookie))
 
       val response = makeAhcResponse(ahcResponse)
 
@@ -456,10 +506,10 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
     }
 
     "return -1 values of expires and maxAge as None" in {
-      val ahcResponse: AHCResponse = mock[AHCResponse]
+      val ahcResponse: AHCResponse = Mockito.mock(classOf[AHCResponse])
 
       val ahcCookie = createCookie("someName", "value", true, "domain", "path", -1L, false, false)
-      ahcResponse.getCookies.returns(util.Arrays.asList(ahcCookie))
+      Mockito.when(ahcResponse.getCookies).thenReturn(util.Arrays.asList(ahcCookie))
 
       val response = makeAhcResponse(ahcResponse)
 
@@ -468,20 +518,20 @@ class AhcWSSpec(implicit ee: ExecutionEnv)
     }
 
     "get the body as bytes from the AHC response" in {
-      val ahcResponse: AHCResponse = mock[AHCResponse]
+      val ahcResponse: AHCResponse = Mockito.mock(classOf[AHCResponse])
       val bytes                    = ByteString(-87, -72, 96, -63, -32, 46, -117, -40, -128, -7, 61, 109, 80, 45, 44, 30)
-      ahcResponse.getResponseBodyAsBytes.returns(bytes.toArray)
+      Mockito.when(ahcResponse.getResponseBodyAsBytes).thenReturn(bytes.toArray)
       val response = makeAhcResponse(ahcResponse)
       response.bodyAsBytes must_== bytes
     }
 
     "get headers from an AHC response in a case insensitive map" in {
-      val ahcResponse: AHCResponse = mock[AHCResponse]
+      val ahcResponse: AHCResponse = Mockito.mock(classOf[AHCResponse])
       val ahcHeaders               = new DefaultHttpHeaders(true)
       ahcHeaders.add("Foo", "bar")
       ahcHeaders.add("Foo", "baz")
       ahcHeaders.add("Bar", "baz")
-      ahcResponse.getHeaders.returns(ahcHeaders)
+      Mockito.when(ahcResponse.getHeaders).thenReturn(ahcHeaders)
       val response = makeAhcResponse(ahcResponse)
       val headers  = response.headers
       headers must beEqualTo(Map("Foo" -> Seq("bar", "baz"), "Bar" -> Seq("baz")))

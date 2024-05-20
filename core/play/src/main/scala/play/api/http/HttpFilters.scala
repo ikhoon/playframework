@@ -7,17 +7,17 @@ package play.api.http
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import scala.jdk.CollectionConverters._
+
 import com.typesafe.config.ConfigException
 import play.api.inject.Binding
 import play.api.inject.BindingKey
 import play.api.inject.Injector
+import play.api.mvc.EssentialFilter
 import play.api.Configuration
 import play.api.Environment
 import play.api.Logger
-import play.api.mvc.EssentialFilter
 import play.utils.Reflect
-
-import scala.jdk.CollectionConverters._
 
 /**
  * Provides filters to the [[play.api.http.HttpRequestHandler]].
@@ -46,7 +46,7 @@ trait HttpFilters {
 class DefaultHttpFilters @Inject() (val filters: EssentialFilter*) extends HttpFilters
 
 object HttpFilters {
-  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[_]] = {
+  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[?]] = {
     Reflect.bindingsFromConfiguration[
       HttpFilters,
       play.http.HttpFilters,

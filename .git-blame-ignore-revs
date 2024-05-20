@@ -3,3 +3,34 @@
 # Upgrade Scalafmt to 2.4.x
 33eee4309ab453f6fd90c929378c7b87444cadc3
 7b5c1ba370cb8e4779247de639905323271d839e
+# Upgrade Scalafmt to 2.5.x
+6e6e94d39566c7ad75f13eba7207b5e93fc0ffa9
+# Upgrade Scalafmt to 2.6.x
+e7923768a51fd30e549572c57506f2387b5337d4
+# Upgrade Scalafmt to 2.7.x
+20e0e98f709e90116a29b671d675b03c39db832d
+# Upgrade Scalafmt to 3.x
+87bcdac6fd18ec4a0de058fd3da1458334e1d209
+ea97026a71db35ac4dcb0d312fa6370fbbe035d9
+27d45299c9af048a10d948bf63a9506f1f61384a
+
+# Scala Steward: Reformat with scalafmt 3.7.2
+b8a4e49711895a2b1e088696d91713e6231abfca
+
+# Scala Steward: Reformat with scalafmt 3.7.3
+4f94acc38e29f9da95a01490f47800fd6004f50c
+
+# Scala Steward: Reformat with scalafmt 3.7.5
+cd2507a778ccaaa595117a632cb3c068b5984b83
+
+# Scala Steward: Reformat with scalafmt 3.7.11
+1d93d8df9a7bdfd12463d7ac1a3e5decfd4f32dc
+
+# Scala Steward: Reformat with scalafmt 3.7.14
+22fac071cbc433042ec0e0738ad908d34d1bb6c0
+
+# Scala Steward: Reformat with scalafmt 3.7.17
+ec06efad503547d81c3e36e3ebf8cba44c6ce306
+
+# Scala Steward: Reformat with scalafmt 3.8.1
+f6350816a5726f1bf98da7ef5d870fcf8f3afdad

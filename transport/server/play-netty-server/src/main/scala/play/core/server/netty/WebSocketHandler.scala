@@ -4,22 +4,21 @@
 
 package play.core.server.netty
 
-import akka.stream.Materializer
-import akka.stream.scaladsl.Flow
-import akka.util.ByteString
-import io.netty.buffer.Unpooled
+import scala.concurrent.duration.Duration
+
 import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.websocketx._
 import io.netty.util.ReferenceCountUtil
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
 import org.reactivestreams.Processor
+import play.api.http.websocket._
 import play.api.http.websocket.Message
 import play.core.server.common.WebSocketFlowHandler
-
-import play.api.http.websocket._
 import play.core.server.common.WebSocketFlowHandler.MessageType
 import play.core.server.common.WebSocketFlowHandler.RawMessage
-
-import scala.concurrent.duration.Duration
 
 private[server] object WebSocketHandler {
 
@@ -30,14 +29,14 @@ private[server] object WebSocketHandler {
    * compliant manner.
    */
   def messageFlowToFrameProcessor(
-      flow: Flow[Message, Message, _],
+      flow: Flow[Message, Message, ?],
       bufferLimit: Int,
       wsKeepAliveMode: String,
       wsKeepAliveMaxIdle: Duration
   )(
       implicit mat: Materializer
   ): Processor[WebSocketFrame, WebSocketFrame] = {
-    // The reason we use a processor is that we *must* release the buffers synchronously, since Akka streams drops
+    // The reason we use a processor is that we *must* release the buffers synchronously, since Pekko streams drops
     // messages, which will mean we can't release the ByteBufs in the messages.
     SynchronousMappedStreams.transform(
       WebSocketFlowHandler

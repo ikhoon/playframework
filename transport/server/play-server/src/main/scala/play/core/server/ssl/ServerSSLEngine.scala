@@ -4,15 +4,15 @@
 
 package play.core.server.ssl
 
-import play.core.server.ServerConfig
-import play.server.api.{ SSLEngineProvider => ScalaSSLEngineProvider }
-import play.server.{ SSLEngineProvider => JavaSSLEngineProvider }
 import java.lang.reflect.Constructor
-
-import play.core.ApplicationProvider
 
 import scala.util.Failure
 import scala.util.Success
+
+import play.core.server.ServerConfig
+import play.core.ApplicationProvider
+import play.server.{ SSLEngineProvider => JavaSSLEngineProvider }
+import play.server.api.{ SSLEngineProvider => ScalaSSLEngineProvider }
 
 /**
  * This singleton object looks for a class of {{play.server.api.SSLEngineProvider}} or {{play.server.SSLEngineProvider}}
@@ -53,19 +53,23 @@ object ServerSSLEngine {
       serverConfig: ServerConfig,
       applicationProvider: ApplicationProvider
   ): JavaSSLEngineProvider = {
-    var serverConfigProviderArgsConstructor: Constructor[_] = null
-    var providerArgsConstructor: Constructor[_]             = null
-    var noArgsConstructor: Constructor[_]                   = null
+    var serverConfigProviderArgsConstructor: Constructor[?] = null
+    var providerArgsConstructor: Constructor[?]             = null
+    var noArgsConstructor: Constructor[?]                   = null
     for (constructor <- providerClass.getConstructors) {
       val parameterTypes = constructor.getParameterTypes
       if (parameterTypes.isEmpty) {
         noArgsConstructor = constructor
-      } else if (parameterTypes.length == 1 && classOf[play.server.ApplicationProvider]
-                   .isAssignableFrom(parameterTypes(0))) {
+      } else if (
+        parameterTypes.length == 1 && classOf[play.server.ApplicationProvider]
+          .isAssignableFrom(parameterTypes(0))
+      ) {
         providerArgsConstructor = constructor
-      } else if (parameterTypes.length == 2 &&
-                 classOf[ServerConfig].isAssignableFrom(parameterTypes(0)) &&
-                 classOf[play.server.ApplicationProvider].isAssignableFrom(parameterTypes(1))) {
+      } else if (
+        parameterTypes.length == 2 &&
+        classOf[ServerConfig].isAssignableFrom(parameterTypes(0)) &&
+        classOf[play.server.ApplicationProvider].isAssignableFrom(parameterTypes(1))
+      ) {
         serverConfigProviderArgsConstructor = constructor
       }
     }
@@ -105,9 +109,11 @@ object ServerSSLEngine {
         noArgsConstructor = constructor.asInstanceOf[Constructor[ScalaSSLEngineProvider]]
       } else if (parameterTypes.length == 1 && classOf[ApplicationProvider].isAssignableFrom(parameterTypes(0))) {
         providerArgsConstructor = constructor.asInstanceOf[Constructor[ScalaSSLEngineProvider]]
-      } else if (parameterTypes.length == 2 &&
-                 classOf[ServerConfig].isAssignableFrom(parameterTypes(0)) &&
-                 classOf[ApplicationProvider].isAssignableFrom(parameterTypes(1))) {
+      } else if (
+        parameterTypes.length == 2 &&
+        classOf[ServerConfig].isAssignableFrom(parameterTypes(0)) &&
+        classOf[ApplicationProvider].isAssignableFrom(parameterTypes(1))
+      ) {
         serverConfigProviderArgsConstructor = constructor.asInstanceOf[Constructor[ScalaSSLEngineProvider]]
       }
     }

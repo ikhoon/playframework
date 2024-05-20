@@ -8,19 +8,19 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.ConcurrentLinkedDeque
-
-import akka.Done
 import javax.inject.Inject
 import javax.inject.Singleton
-import play.api.Logger
 
 import scala.annotation.tailrec
-import scala.jdk.FutureConverters._
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import scala.jdk.FutureConverters._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+
+import org.apache.pekko.Done
+import play.api.Logger
 
 /**
  * Application lifecycle register.
@@ -65,7 +65,7 @@ trait ApplicationLifecycle {
    * The stop hook should redeem the returned future when it is finished shutting down.  It is acceptable to stop
    * immediately and return a successful future.
    */
-  def addStopHook(hook: () => Future[_]): Unit
+  def addStopHook(hook: () => Future[?]): Unit
 
   /**
    * Add a stop hook to be called when the application stops.
@@ -73,7 +73,7 @@ trait ApplicationLifecycle {
    * The stop hook should redeem the returned future when it is finished shutting down.  It is acceptable to stop
    * immediately and return a successful future.
    */
-  def addStopHook(hook: Callable[_ <: CompletionStage[_]]): Unit =
+  def addStopHook(hook: Callable[? <: CompletionStage[?]]): Unit =
     addStopHook(() => { val cs = hook.call(); cs.asScala })
 
   /**
@@ -88,7 +88,7 @@ trait ApplicationLifecycle {
     "Do not invoke stop() directly. Instead, use CoordinatedShutdown.run to stop and release your resources.",
     "2.7.0"
   )
-  def stop(): Future[_]
+  def stop(): Future[?]
 
   /**
    * @return the Java version for this Application Lifecycle.
@@ -102,9 +102,9 @@ trait ApplicationLifecycle {
 @Singleton
 class DefaultApplicationLifecycle @Inject() () extends ApplicationLifecycle {
   private val logger = Logger(getClass)
-  private val hooks  = new ConcurrentLinkedDeque[() => Future[_]]()
+  private val hooks  = new ConcurrentLinkedDeque[() => Future[?]]()
 
-  override def addStopHook(hook: () => Future[_]): Unit = hooks.push(hook)
+  override def addStopHook(hook: () => Future[?]): Unit = hooks.push(hook)
 
   private val stopPromise: Promise[Done] = Promise()
   private val started                    = new AtomicBoolean(false)
@@ -114,7 +114,7 @@ class DefaultApplicationLifecycle @Inject() () extends ApplicationLifecycle {
    *
    * @return A future that will be redeemed once all hooks have executed.
    */
-  override def stop(): Future[_] = {
+  override def stop(): Future[?] = {
     logger.debug(s"Executing ApplicationLifecycle.stop() with ${hooks.size()} stop hook(s) registered")
     // run the code only once and memoize the result of the invocation in a Promise.future so invoking
     // the method many times causes a single run producing the same result in all cases.

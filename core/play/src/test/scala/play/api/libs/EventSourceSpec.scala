@@ -4,7 +4,7 @@
 
 package play.api.libs
 
-import akka.stream.scaladsl._
+import org.apache.pekko.stream.scaladsl._
 import org.specs2.mutable.Specification
 import play.api.http.ContentTypes
 import play.api.mvc.Results
@@ -36,10 +36,14 @@ class EventSourceSpec extends Specification {
     "support '\\r\\n' as an end of line" in {
       Event("a\r\nb").formatted must equalTo("data: a\ndata: b\n\n")
     }
+
+    "support trailing newline" in {
+      Event("a\n").formatted must equalTo("data: a\ndata: \n\n")
+    }
   }
 
   "EventSource.Event" should {
-    "be writeable as a response body using an Akka Source" in {
+    "be writeable as a response body using an Pekko Source" in {
       val stringSource = Source(Vector("foo", "bar", "baz"))
       val flow         = stringSource.via(EventSource.flow)
       val result       = Results.Ok.chunked(flow)

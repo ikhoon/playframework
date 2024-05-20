@@ -13,8 +13,8 @@ import play.core.utils.AsciiSet
 /**
  * Provides support for correctly encoding pieces of URIs.
  *
- * @see http://www.ietf.org/rfc/rfc3986.txt
- * @define javadoc http://docs.oracle.com/javase/8/docs/api
+ * @see https://www.ietf.org/rfc/rfc3986.txt
+ * @define javadoc https://docs.oracle.com/en/java/javase/17/docs/api
  */
 object UriEncoding {
 
@@ -33,7 +33,7 @@ object UriEncoding {
    * other differences too.
    *
    * When encoding path segments the `encodePathSegment` method should always
-   * be used in preference to the [[$javadoc/java/net/URLEncoder.html#encode-java.lang.String-java.lang.String- java.net.URLEncoder.encode]]
+   * be used in preference to the [[$javadoc/java.base/java/net/URLEncoder.html#encode(java.lang.String,java.lang.String) java.net.URLEncoder.encode]]
    * method. `URLEncoder.encode`, despite its name, actually provides encoding
    * in the `application/x-www-form-urlencoded` MIME format which is the encoding
    * used for form data in HTTP GET and POST requests. This encoding is suitable
@@ -56,8 +56,8 @@ object UriEncoding {
         out.write(b)
       } else {
         out.write('%')
-        out.write(upperHex((b >> 4) & 0xF))
-        out.write(upperHex(b & 0xF))
+        out.write(upperHex((b >> 4) & 0xf))
+        out.write(upperHex(b & 0xf))
       }
     }
     out.toString("US-ASCII")
@@ -107,7 +107,7 @@ object UriEncoding {
     val out   = new ByteArrayOutputStream()
     var inPos = 0
     def next(): Int = {
-      val b = in(inPos) & 0xFF
+      val b = in(inPos) & 0xff
       inPos += 1
       b
     }
@@ -216,7 +216,7 @@ object UriEncoding {
    */
   private def upperHex(x: Int): Int = {
     // Assume 0 <= x < 16
-    if (x < 10) (x + '0') else (x - 10 + 'A')
+    if (x < 10) x + '0' else x - 10 + 'A'
   }
 
   /**

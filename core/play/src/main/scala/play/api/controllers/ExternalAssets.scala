@@ -7,12 +7,12 @@ package controllers
 import java.io._
 import javax.inject.Inject
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import play.api._
 import play.api.http.FileMimeTypes
 import play.api.mvc._
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 
 /**
  * Controller that serves static resources from an external folder.
@@ -29,7 +29,6 @@ import scala.concurrent.Future
  * GET     /assets/\uFEFF*file               controllers.ExternalAssets.at(path="C:\external", file)
  * GET     /assets/\uFEFF*file               controllers.ExternalAssets.at(path="relativeToYourApp", file)
  * }}}
- *
  */
 class ExternalAssets @Inject() (environment: Environment)(implicit ec: ExecutionContext, fileMimeTypes: FileMimeTypes)
     extends ControllerHelpers {

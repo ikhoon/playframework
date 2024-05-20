@@ -4,22 +4,20 @@
 
 package play.core.j
 
+import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
 
-import play.api.libs.Files.TemporaryFile
-
-import akka.stream.Materializer
-import play.api.libs.Files
-
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
-import play.api.mvc._
-import play.libs.Files.DelegateTemporaryFile
-import play.libs.Files.{ TemporaryFile => JTemporaryFile }
 
-import java.io.File
-import java.nio.file.Path
+import org.apache.pekko.stream.Materializer
+import play.api.libs.Files
+import play.api.libs.Files.TemporaryFile
+import play.api.mvc._
+import play.libs.Files.{ TemporaryFile => JTemporaryFile }
+import play.libs.Files.DelegateTemporaryFile
 
 /**
  * provides Java centric BodyParsers
@@ -52,16 +50,17 @@ object JavaParsers {
           )
         }.asJava
       }
+      override def isEmpty: Boolean = multipart.isEmpty
     }
   }
 
   def toJavaRaw(rawBuffer: RawBuffer): play.mvc.Http.RawBuffer = {
     new play.mvc.Http.RawBuffer {
-      def size                    = rawBuffer.size
+      def size()                  = rawBuffer.size
       def asBytes(maxLength: Int) = rawBuffer.asBytes(maxLength).orNull
-      def asBytes                 = rawBuffer.asBytes().orNull
-      def asFile                  = rawBuffer.asFile
-      override def toString       = rawBuffer.toString
+      def asBytes()               = rawBuffer.asBytes().orNull
+      def asFile()                = rawBuffer.asFile
+      override def toString()     = rawBuffer.toString
     }
   }
 

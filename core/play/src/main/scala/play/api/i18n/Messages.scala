@@ -5,19 +5,9 @@
 package play.api.i18n
 
 import java.net.URL
-
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import play.api._
-import play.api.http.HttpConfiguration
-import play.api.libs.typedmap.TypedKey
-import play.api.mvc.Cookie.SameSite
-import play.api.mvc._
-import play.libs.Scala
-import play.mvc.Http
-import play.utils.PlayIO
-import play.utils.Resources
 
 import scala.annotation.implicitNotFound
 import scala.concurrent.duration.FiniteDuration
@@ -25,6 +15,16 @@ import scala.io.Codec
 import scala.language._
 import scala.util.parsing.combinator._
 import scala.util.parsing.input._
+
+import play.api._
+import play.api.http.HttpConfiguration
+import play.api.libs.typedmap.TypedKey
+import play.api.mvc._
+import play.api.mvc.Cookie.SameSite
+import play.libs.Scala
+import play.mvc.Http
+import play.utils.PlayIO
+import play.utils.Resources
 
 /**
  * Internationalisation API.
@@ -118,7 +118,7 @@ object Messages extends MessagesImplicits {
   private[i18n] class MessagesParser(messageSource: MessageSource, messageSourceName: String) extends RegexParsers {
     override val whiteSpace = """^[ \t]+""".r
     val end                 = """^\s*""".r
-    val newLine             = namedError((("\r".?) ~> "\n"), "End of line expected")
+    val newLine             = namedError(("\r".?) ~> "\n", "End of line expected")
     val ignoreWhiteSpace    = opt(whiteSpace)
     val blankLine           = ignoreWhiteSpace <~ newLine ^^ (_ => Comment(""))
     val comment             = """^#.*""".r ^^ (s => Comment(s))
@@ -127,11 +127,12 @@ object Messages extends MessagesImplicits {
 
     val messagePattern = namedError(
       rep(
-        ("""\""" ^^ (_ => "")) ~> (// Ignore the leading \
-        ("\r".?) ~> "\n" ^^ (_ => "") | // Ignore escaped end of lines \
-          "n" ^^ (_ => "\n") |          // Translate literal \n to real newline
-          """\""" |                     // Handle escaped \\
-          "^.".r ^^ ("""\""" + _)) |
+        ("""\""" ^^ (_ => "")) ~> (       // Ignore the leading \
+          ("\r".?) ~> "\n" ^^ (_ => "") | // Ignore escaped end of lines \
+            "n" ^^ (_ => "\n") |          // Translate literal \n to real newline
+            """\""" |                     // Handle escaped \\
+            "^.".r ^^ ("""\""" + _)
+        ) |
           "^.".r // Or any character
       ) ^^ (_.mkString),
       "Message pattern expected"
@@ -160,10 +161,10 @@ object Messages extends MessagesImplicits {
         case NoSuccess(message, in) =>
           Left(
             new PlayException.ExceptionSource("Configuration error", message) {
-              def line       = in.pos.line
-              def position   = in.pos.column - 1
-              def input      = messageSource.read
-              def sourceName = messageSourceName
+              def line()       = in.pos.line
+              def position()   = in.pos.column - 1
+              def input()      = messageSource.read
+              def sourceName() = messageSourceName
             }
           )
       }

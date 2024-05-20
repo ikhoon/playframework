@@ -6,6 +6,8 @@ package play.microbenchmark.it
 
 import java.util.concurrent.TimeUnit
 
+import scala.util.Random
+
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
@@ -18,8 +20,6 @@ import play.api.test.ServerEndpointRecipe
 import play.core.server.LoggingTrustManager
 import play.core.server.ServerEndpoint
 import play.microbenchmark.it.HelloWorldBenchmark.ThreadState
-
-import scala.util.Random
 
 /**
  * Benchmark which starts a full Play server that returns "Hello world" responses.
@@ -51,9 +51,9 @@ class HelloWorldBenchmark {
     val endpointRecipe = endpoint match {
       case "nt-11-pln" => play.it.test.NettyServerEndpointRecipes.Netty11Plaintext
       case "nt-11-enc" => play.it.test.NettyServerEndpointRecipes.Netty11Encrypted
-      case "ak-11-pln" => play.it.test.AkkaHttpServerEndpointRecipes.AkkaHttp11Plaintext
-      case "ak-11-enc" => play.it.test.AkkaHttpServerEndpointRecipes.AkkaHttp11Encrypted
-      case "ak-20-enc" => play.it.test.AkkaHttpServerEndpointRecipes.AkkaHttp20Encrypted
+      case "ak-11-pln" => play.it.test.PekkoHttpServerEndpointRecipes.PekkoHttp11Plaintext
+      case "ak-11-enc" => play.it.test.PekkoHttpServerEndpointRecipes.PekkoHttp11Encrypted
+      case "ak-20-enc" => play.it.test.PekkoHttpServerEndpointRecipes.PekkoHttp20Encrypted
     }
     val startResult = ServerEndpointRecipe.startEndpoint(endpointRecipe, appFactory)
     serverEndpoint = startResult._1

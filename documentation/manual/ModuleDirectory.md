@@ -19,12 +19,15 @@ To create your own public module or to migrate from a `play.api.Plugin`, please 
 * **Website:** <https://github.com/ArpNetworking/sbt-typescript>
 * **Short description:** A plugin for sbt that uses sbt-web to compile typescript resources
 
+### Svelte Plugin
+Website: https://github.com/tanin47/sbt-svelte
+Short description: A plugin for sbt that uses sbt-web to compile Svelte components
 
 ## Authentication (Login & Registration) and Authorization (Restricted Access)
 
 ### Silhouette (Scala)
 
-* **Website:** <https://github.com/honeycomb-cheesecake/play-silhouette>
+* **Website:** <https://github.com/playframework/play-silhouette>
 * **Documentation:** <https://silhouette.readme.io/docs>
 * **Short description:** An authentication library that supports several authentication methods, including OAuth1, OAuth2, OpenID, CAS, Credentials, Basic Authentication, Two Factor Authentication or custom authentication schemes.
 
@@ -74,6 +77,11 @@ To create your own public module or to migrate from a `play.api.Plugin`, please 
 
 * **Website:** <https://github.com/KarelCemus/play-redis>
 * **Short description:** Provides both blocking and asynchronous redis based cache implementation. It implements common Play's CacheApi for both Java and Scala plus provides a few more Scala APIs implementing various Redis commands including the support of collections.
+
+### Kuzminki (Scala)
+* **Website (docs, sample):** <https://kuzminki.info/>
+* **Demo:** <https://github.com/karimagnusson/kuzminki-play-demo>
+* **Short description:** Kuzminki is feature-rich query builder and access library for PostgreSQL.
 
 
 ## Page Rendering
@@ -150,6 +158,12 @@ To create your own public module or to migrate from a `play.api.Plugin`, please 
 * **Website:** <https://github.com/plippe/play-form>
 * **Short description:** A module to submit forms with commonly unsupported browser methods like `PUT`, `PATCH`, and `DELETE`.
 
+### Hepek
+* **Website:** <https://sake92.github.io/hepek/integrations/play-framework.html>
+* **Repository:** <https://github.com/sake92/hepek>
+* **Short description:** A library for typesafe generating of boilerplate HTML.
+
+
 ## Utilities
 
 ### Emailer Plugin  (Java and Scala)
@@ -165,6 +179,10 @@ To create your own public module or to migrate from a `play.api.Plugin`, please 
 ### play-secret-rotation (Scala)
 * **Website:** <https://github.com/guardian/play-secret-rotation>
 * **Short description:** Provides a Play2 Application Secret rotation on an active cluster.
+
+### io-path (Scala)
+* **Website:** <https://github.com/karimagnusson/io-path>
+* **Short description:** io-path is a simple library for working with files and folders. It provides methods for common tasks as well as download, upload, gzip, zip and tar.
 
 ## Cloud Services
 

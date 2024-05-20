@@ -38,7 +38,7 @@ We explain how to customize the default bindings and application loader in more 
 
 ## Declaring runtime DI dependencies
 
-If you have a component, such as a controller, and it requires some other components as dependencies, then this can be declared using the [@Inject](https://docs.oracle.com/javaee/7/api/javax/inject/Inject.html) annotation.  The `@Inject` annotation can be used on fields or on constructors. We recommend that you use it on constructors, for example:
+If you have a component, such as a controller, and it requires some other components as dependencies, then this can be declared using the [@Inject](https://javax-inject.github.io/javax-inject/api/javax/inject/Inject.html) annotation.  The `@Inject` annotation can be used on fields or on constructors. We recommend that you use it on constructors, for example:
 
 @[constructor](code/RuntimeDependencyInjection.scala)
 
@@ -64,7 +64,7 @@ The dependency injection system manages the lifecycle of injected components, cr
 
 ## Singletons
 
-Sometimes you may have a component that holds some state, such as a cache, or a connection to an external resource, or a component might be expensive to create. In these cases it may be important that there is only be one instance of that component. This can be achieved using the [@Singleton](https://docs.oracle.com/javaee/7/api/javax/inject/Singleton.html) annotation:
+Sometimes you may have a component that holds some state, such as a cache, or a connection to an external resource, or a component might be expensive to create. In these cases it may be important that there is only be one instance of that component. This can be achieved using the [@Singleton](https://javax-inject.github.io/javax-inject/api/javax/inject/Singleton.html) annotation:
 
 @[singleton](code/RuntimeDependencyInjection.scala)
 
@@ -78,7 +78,7 @@ The `ApplicationLifecycle` will stop all components in reverse order from when t
 
 > **Note:** It's very important to ensure that all components that register a stop hook are singletons.  Any non singleton components that register stop hooks could potentially be a source of memory leaks, since a new stop hook will be registered each time the component is created.
 
-You can can also implement the cleanup logic using [[Coordinated Shutdown|Shutdown]]. Play uses Akka's Coordinated Shutdown internally but it is also available for userland code. `ApplicationLifecycle#stop` is implemented as a Coordinated Shutdown task. The main difference is that `ApplicationLifecycle#stop` runs all stop hooks sequentially in a predictable order where Coordinated Shutdown runs all tasks in the same phase in parallel which may be faster but unpredictable.
+You can can also implement the cleanup logic using [[Coordinated Shutdown|Shutdown]]. Play uses Pekko's Coordinated Shutdown internally but it is also available for userland code. `ApplicationLifecycle#stop` is implemented as a Coordinated Shutdown task. The main difference is that `ApplicationLifecycle#stop` runs all stop hooks sequentially in a predictable order where Coordinated Shutdown runs all tasks in the same phase in parallel which may be faster but unpredictable.
 
 ## Providing custom bindings
 
@@ -100,7 +100,7 @@ The simplest way to bind an implementation to an interface is to use the Guice [
 
 #### Programmatic bindings
 
-In some more complex situations, you may want to provide more complex bindings, such as when you have multiple implementations of the one trait, which are qualified by [@Named](https://docs.oracle.com/javaee/7/api/javax/inject/Named.html) annotations.  In these cases, you can implement a custom Guice [Module](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/Module.html):
+In some more complex situations, you may want to provide more complex bindings, such as when you have multiple implementations of the one trait, which are qualified by [@Named](https://javax-inject.github.io/javax-inject/api/javax/inject/Named.html) annotations.  In these cases, you can implement a custom Guice [Module](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/Module.html):
 
 @[guice-module](code/RuntimeDependencyInjection.scala)
 
@@ -185,3 +185,11 @@ When you override the [`ApplicationLoader`](api/scala/play/api/ApplicationLoader
     play.application.loader = "modules.CustomApplicationLoader"
 
 You're not limited to using Guice for dependency injection. By overriding the `ApplicationLoader` you can take control of how the application is initialized. Find out more in the [[next section|ScalaCompileTimeDependencyInjection]].
+
+## Adding dependency to a class without touching subclasses
+
+Sometimes you may want to add new dependency to some base class which may have many subclasses.
+To avoid providing the dependency directly to each of them you may add it as an injectable field.
+This approach can reduce the testability of the class so use it with care.
+
+@[class-field-dependency-injection](code/RuntimeDependencyInjection.scala)

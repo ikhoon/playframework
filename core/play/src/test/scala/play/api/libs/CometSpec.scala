@@ -4,42 +4,42 @@
 
 package play.api.libs
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl._
-import akka.stream.Materializer
-import akka.util.ByteString
-import akka.util.Timeout
+import scala.concurrent.Await
+import scala.concurrent.Future
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.util.Timeout
 import org.specs2.mutable._
-import play.api.PlayCoreTestApplication
 import play.api.http.ContentTypes
 import play.api.libs.json.JsString
 import play.api.libs.json.JsValue
 import play.api.mvc._
+import play.api.PlayCoreTestApplication
 import play.core.test.FakeRequest
-
-import scala.concurrent.Await
-import scala.concurrent.Future
 
 class CometSpec extends Specification {
   class MockController(val materializer: Materializer, action: ActionBuilder[Request, AnyContent])
       extends ControllerHelpers {
     val Action = action
 
-    //#comet-string
+    // #comet-string
     def cometString = action {
       implicit val m                      = materializer
-      def stringSource: Source[String, _] = Source(List("kiki", "foo", "bar"))
+      def stringSource: Source[String, ?] = Source(List("kiki", "foo", "bar"))
       Ok.chunked(stringSource.via(Comet.string("parent.cometMessage"))).as(ContentTypes.HTML)
     }
-    //#comet-string
+    // #comet-string
 
-    //#comet-json
+    // #comet-json
     def cometJson = action {
       implicit val m                       = materializer
-      def stringSource: Source[JsValue, _] = Source(List(JsString("jsonString")))
+      def stringSource: Source[JsValue, ?] = Source(List(JsString("jsonString")))
       Ok.chunked(stringSource.via(Comet.json("parent.cometMessage"))).as(ContentTypes.HTML)
     }
-    //#comet-json
+    // #comet-json
   }
 
   def newTestApplication(): play.api.Application = new PlayCoreTestApplication() {
@@ -75,7 +75,7 @@ class CometSpec extends Specification {
     }
   }
 
-  //---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Can't use play.api.test.ResultsExtractor here as it is not imported
   // So, copy the methods necessary to extract string.
 

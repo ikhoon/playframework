@@ -7,13 +7,13 @@ package play.api.http
 import javax.inject.Inject
 import javax.inject.Provider
 
-import play.api.ApplicationLoader.DevContext
 import play.api.http.Status._
 import play.api.inject.Binding
 import play.api.inject.BindingKey
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
 import play.api.routing.Router
+import play.api.ApplicationLoader.DevContext
 import play.api.Configuration
 import play.api.Environment
 import play.api.OptionalDevContext
@@ -51,7 +51,7 @@ trait HttpRequestHandler {
 }
 
 object HttpRequestHandler {
-  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[_]] = {
+  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[?]] = {
     Reflect.bindingsFromConfiguration[
       HttpRequestHandler,
       play.http.HttpRequestHandler,
@@ -66,7 +66,7 @@ object ActionCreator {
   import play.http.ActionCreator
   import play.http.DefaultActionCreator
 
-  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[_]] = {
+  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[?]] = {
     Reflect
       .configuredClass[ActionCreator, ActionCreator, DefaultActionCreator](
         environment,
@@ -74,7 +74,7 @@ object ActionCreator {
         "play.http.actionCreator",
         "ActionCreator"
       )
-      .fold(Seq[Binding[_]]()) { either =>
+      .fold(Seq[Binding[?]]()) { either =>
         val impl = either.fold(identity, identity)
         Seq(BindingKey(classOf[ActionCreator]).to(impl))
       }
@@ -85,7 +85,7 @@ object ActionCreator {
  * Implementation of a [HttpRequestHandler] that always returns NotImplemented results
  */
 object NotImplementedHttpRequestHandler extends HttpRequestHandler {
-  def handlerForRequest(request: RequestHeader) =
+  def handlerForRequest(request: RequestHeader): (RequestHeader, Handler) =
     request -> EssentialAction(_ => Accumulator.done(Results.NotImplemented))
 }
 

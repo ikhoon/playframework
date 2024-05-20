@@ -7,13 +7,14 @@ package scalaguide.http.routing.relative
 package controllers
 
 import javax.inject._
+
 import play.api.mvc._
 
 @Singleton
 class Relative @Inject() (cc: ControllerComponents) extends AbstractController(cc) {
-  def helloview = Action { implicit request => Ok(views.html.hello("Bob")) }
+  def helloview: Action[AnyContent] = Action { implicit request => Ok(views.html.hello("Bob")) }
 
-  def hello(name: String) = Action {
+  def hello(name: String): Action[AnyContent] = Action {
     Ok(s"Hello $name!")
   }
 }

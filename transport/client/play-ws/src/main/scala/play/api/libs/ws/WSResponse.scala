@@ -4,11 +4,11 @@
 
 package play.api.libs.ws
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import play.api.libs.json.JsValue
-
 import scala.xml.Elem
+
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
+import play.api.libs.json.JsValue
 
 /**
  * A WS Response that can use Play specific classes.
@@ -91,7 +91,7 @@ trait WSResponse extends StandaloneWSResponse with WSBodyReadables {
    */
   override def bodyAsBytes: ByteString
 
-  override def bodyAsSource: Source[ByteString, _]
+  override def bodyAsSource: Source[ByteString, ?]
 
   @deprecated("Use response.headers", "2.6.0")
   def allHeaders: Map[String, scala.collection.Seq[String]]

@@ -4,7 +4,7 @@
 
 package play.api.libs.ws.ahc
 
-import akka.stream.Materializer
+import org.apache.pekko.stream.Materializer
 import play.api.libs.ws.ahc.cache.AhcHttpCache
 import play.api.libs.ws.StandaloneWSClient
 import play.api.libs.ws.WSClient
@@ -51,7 +51,7 @@ object AhcWSClient {
 
   /**
    * Convenient factory method that uses a play.api.libs.ws.WSClientConfig value for configuration instead of
-   * an [[http://static.javadoc.io/org.asynchttpclient/async-http-client/2.0.0/org/asynchttpclient/AsyncHttpClientConfig.html org.asynchttpclient.AsyncHttpClientConfig]].
+   * an [[https://www.javadoc.io/doc/org.asynchttpclient/async-http-client/2.12.3/org/asynchttpclient/AsyncHttpClientConfig.html org.asynchttpclient.AsyncHttpClientConfig]].
    *
    * Typical usage:
    *

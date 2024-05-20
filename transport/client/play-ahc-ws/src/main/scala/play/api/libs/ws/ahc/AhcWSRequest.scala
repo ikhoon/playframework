@@ -7,13 +7,13 @@ package play.api.libs.ws.ahc
 import java.io.File
 import java.net.URI
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import scala.concurrent.duration.Duration
+import scala.concurrent.Future
+
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import play.api.libs.ws._
 import play.api.mvc.MultipartFormData
-
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 
 /**
  * A WS Request backed by AsyncHTTPClient.
@@ -155,9 +155,9 @@ case class AhcWSRequest(underlying: StandaloneAhcWSRequest) extends WSRequest wi
 
   override def withUrl(url: String): WSRequest = toWSRequest(underlying.withUrl(url))
 
-  //-------------------------------------------------
+  // -------------------------------------------------
   // PATCH
-  //-------------------------------------------------
+  // -------------------------------------------------
 
   /**
    * Perform a PATCH on the request asynchronously.
@@ -167,7 +167,6 @@ case class AhcWSRequest(underlying: StandaloneAhcWSRequest) extends WSRequest wi
   /**
    * Perform a PATCH on the request asynchronously.
    * Request body won't be chunked
-   *
    *
    * @deprecated Import WSBodyWritables and use the typeclass in preference to this method, since 2.6.0
    */
@@ -182,13 +181,13 @@ case class AhcWSRequest(underlying: StandaloneAhcWSRequest) extends WSRequest wi
    * @deprecated Import WSBodyWritables and use the typeclass in preference to this method, since 2.6.0
    */
   @deprecated("Use patch(bodyWritable)", "2.6.0")
-  override def patch(body: Source[MultipartFormData.Part[Source[ByteString, _]], _]): Future[WSResponse] = {
-    patch[Source[MultipartFormData.Part[Source[ByteString, _]], _]](body)
+  override def patch(body: Source[MultipartFormData.Part[Source[ByteString, ?]], ?]): Future[WSResponse] = {
+    patch[Source[MultipartFormData.Part[Source[ByteString, ?]], ?]](body)
   }
 
-  //-------------------------------------------------
+  // -------------------------------------------------
   // POST
-  //-------------------------------------------------
+  // -------------------------------------------------
 
   /**
    * Perform a POST on the request asynchronously.
@@ -211,13 +210,13 @@ case class AhcWSRequest(underlying: StandaloneAhcWSRequest) extends WSRequest wi
    * @deprecated Import WSBodyWritables and use the typeclass in preference to this method, since 2.6.0
    */
   @deprecated("Use post(BodyWritable)", "2.6.0")
-  override def post(body: Source[MultipartFormData.Part[Source[ByteString, _]], _]): Future[WSResponse] = {
-    post[Source[MultipartFormData.Part[Source[ByteString, _]], _]](body)
+  override def post(body: Source[MultipartFormData.Part[Source[ByteString, ?]], ?]): Future[WSResponse] = {
+    post[Source[MultipartFormData.Part[Source[ByteString, ?]], ?]](body)
   }
 
-  //-------------------------------------------------
+  // -------------------------------------------------
   // PUT
-  //-------------------------------------------------
+  // -------------------------------------------------
 
   /**
    * Perform a PUT on the request asynchronously.
@@ -241,8 +240,8 @@ case class AhcWSRequest(underlying: StandaloneAhcWSRequest) extends WSRequest wi
    * @deprecated Import WSBodyWritables and use the typeclass in preference to this method, since 2.6.0
    */
   @deprecated("Use put(BodyWritable)", "2.6.0")
-  override def put(body: Source[MultipartFormData.Part[Source[ByteString, _]], _]): Future[WSResponse] = {
-    put[Source[MultipartFormData.Part[Source[ByteString, _]], _]](body)
+  override def put(body: Source[MultipartFormData.Part[Source[ByteString, ?]], ?]): Future[WSResponse] = {
+    put[Source[MultipartFormData.Part[Source[ByteString, ?]], ?]](body)
   }
 
   override def delete(): Future[Response] = execute("DELETE")

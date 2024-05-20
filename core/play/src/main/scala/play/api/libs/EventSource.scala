@@ -4,18 +4,18 @@
 
 package play.api.libs
 
-import akka.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Flow
 import play.api.http.ContentTypeOf
 import play.api.http.ContentTypes
 import play.api.http.Writeable
-import play.api.mvc._
-import play.api.libs.json.Json
 import play.api.libs.json.JsValue
+import play.api.libs.json.Json
+import play.api.mvc._
 
 /**
- * This class provides an easy way to use Server Sent Events (SSE) as a chunked encoding, using an Akka Source.
+ * This class provides an easy way to use Server Sent Events (SSE) as a chunked encoding, using an Pekko Source.
  *
- * Please see the <a href="http://dev.w3.org/html5/eventsource/">Server-Sent Events specification</a> for details.
+ * Please see the <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events specification</a> for details.
  *
  * An example of how to display an event stream:
  *
@@ -23,7 +23,7 @@ import play.api.libs.json.JsValue
  *   import java.time.ZonedDateTime
  *   import java.time.format.DateTimeFormatter
  *   import javax.inject.Singleton
- *   import akka.stream.scaladsl.Source
+ *   import org.apache.pekko.stream.scaladsl.Source
  *   import play.api.http.ContentTypes
  *   import play.api.libs.EventSource
  *   import play.api.mvc._
@@ -52,13 +52,13 @@ object EventSource {
    *   Ok.chunked(jsonStream via EventSource.flow).as(ContentTypes.EVENT_STREAM)
    * }}}
    */
-  def flow[E: EventDataExtractor: EventNameExtractor: EventIdExtractor]: Flow[E, Event, _] = {
+  def flow[E: EventDataExtractor: EventNameExtractor: EventIdExtractor]: Flow[E, Event, ?] = {
     Flow[E].map(Event(_))
   }
 
-  //------------------
+  // ------------------
   // Event
-  //------------------
+  // ------------------
 
   /**
    * An event encoded with the SSE protocol..
@@ -72,7 +72,7 @@ object EventSource {
       val sb = new StringBuilder
       name.foreach(sb.append("event: ").append(_).append('\n'))
       id.foreach(sb.append("id: ").append(_).append('\n'))
-      for (line <- data.split("(\r?\n)|\r")) {
+      for (line <- data.split("(\r?\n)|\r", -1)) {
         sb.append("data: ").append(line).append('\n')
       }
       sb.append('\n')
@@ -88,11 +88,9 @@ object EventSource {
      * If no extractor is available, the implicit conversion in the low priority traits will be used.
      * For the EventDataExtractor, this means `String` or `JsValue` will be automatically mapped,
      * and the nameExtractor and idExtractor will implicitly resolve to `None`.
-     *
      */
     def apply[A](a: A)(
-        implicit
-        dataExtractor: EventDataExtractor[A],
+        implicit dataExtractor: EventDataExtractor[A],
         nameExtractor: EventNameExtractor[A],
         idExtractor: EventIdExtractor[A]
     ): Event = {
@@ -108,9 +106,9 @@ object EventSource {
     }
   }
 
-  //------------------
+  // ------------------
   // Event Data Extractor
-  //------------------
+  // ------------------
 
   case class EventDataExtractor[A](eventData: A => String)
 
@@ -122,9 +120,9 @@ object EventSource {
 
   object EventDataExtractor extends LowPriorityEventEncoder
 
-  //------------------
+  // ------------------
   // Event ID Extractor
-  //------------------
+  // ------------------
 
   case class EventIdExtractor[E](eventId: E => Option[String])
 
@@ -134,9 +132,9 @@ object EventSource {
 
   object EventIdExtractor extends LowPriorityEventIdExtractor
 
-  //------------------
+  // ------------------
   // Event Name Extractor
-  //------------------
+  // ------------------
 
   case class EventNameExtractor[E](eventName: E => Option[String])
 

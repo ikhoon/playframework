@@ -6,20 +6,21 @@ package play.filters.cors
 
 import javax.inject.Inject
 
-import play.api.Application
 import play.api.http.HttpFilters
 import play.api.inject.bind
 import play.api.mvc.DefaultActionBuilder
+import play.api.mvc.EssentialFilter
 import play.api.mvc.Results
 import play.api.routing.sird._
 import play.api.routing.Router
 import play.api.routing.SimpleRouterImpl
+import play.api.Application
 import play.filters.cors.CORSFilterSpec._
 import play.mvc.Http.HeaderNames._
 
 object CORSFilterSpec {
   class Filters @Inject() (corsFilter: CORSFilter) extends HttpFilters {
-    def filters = Seq(corsFilter)
+    def filters: Seq[EssentialFilter] = Seq(corsFilter)
   }
 
   class CorsApplicationRouter @Inject() (action: DefaultActionBuilder)
@@ -33,7 +34,7 @@ object CORSFilterSpec {
 }
 
 class CORSFilterSpec extends CORSCommonSpec {
-  def withApplication[T](conf: Map[String, _ <: Any] = Map.empty)(block: Application => T): T = {
+  def withApplication[T](conf: Map[String, ? <: Any] = Map.empty)(block: Application => T): T = {
     running(
       _.configure(conf).overrides(
         bind[Router].to[CorsApplicationRouter],

@@ -4,12 +4,17 @@
 
 package play.api.db.evolutions
 
-import java.io.InputStream
 import java.io.File
+import java.io.InputStream
 import java.net.URI
+import java.nio.file.Path
 import java.sql._
 import javax.inject.Inject
 import javax.inject.Singleton
+
+import scala.annotation.tailrec
+import scala.io.Codec
+import scala.util.control.NonFatal
 
 import play.api.db.DBApi
 import play.api.db.Database
@@ -17,10 +22,6 @@ import play.api.Environment
 import play.api.Logger
 import play.api.PlayException
 import play.utils.PlayIO
-
-import scala.annotation.tailrec
-import scala.io.Codec
-import scala.util.control.NonFatal
 
 /**
  * Evolutions API.
@@ -168,10 +169,36 @@ trait EvolutionsApi {
       substitutionsMappings: Map[String, String] = Map.empty,
       substitutionsPrefix: String = "$evolutions{{{",
       substitutionsSuffix: String = "}}}",
-      substitutionsEscape: Boolean = true
+      substitutionsEscape: Boolean = true,
+      evolutionsPath: String = "evolutions"
   ): Unit = {
+    val evolutionsConfig = new EvolutionsConfig {
+      // Using a dummy evolutions config, however the only config that is relevant here for the EnvironmentEvolutionsReader
+      // is the "path" setting, everything else does not matter actually. Using default values from the reference.conf
+      override def forDatasource(db: String): EvolutionsDatasourceConfig = DefaultEvolutionsDatasourceConfig(
+        true, // enabled
+        schema,
+        metaTable,
+        autocommit,
+        false, // useLocks
+        false, // autoApply
+        false, // autoApplyDowns
+        false, // skipApplyDownsOnly
+        substitutionsPrefix,
+        substitutionsSuffix,
+        substitutionsMappings,
+        substitutionsEscape,
+        evolutionsPath // <-- this is all that matters for the EnvironmentEvolutionsReader
+      )
+    }
+
     val scripts =
-      this.scripts(dbName, new EnvironmentEvolutionsReader(Environment.simple(path = path)), schema, metaTable)
+      this.scripts(
+        dbName,
+        new EnvironmentEvolutionsReader(Environment.simple(path = path), evolutionsConfig),
+        schema,
+        metaTable
+      )
     this.evolve(
       dbName,
       scripts,
@@ -306,10 +333,10 @@ class DatabaseEvolutions(
    * Read evolutions from the database.
    */
   def databaseEvolutions(): Seq[Evolution] = {
+    checkEvolutionsState()
     implicit val connection = database.getConnection(autocommit = true)
 
     try {
-      checkEvolutionsState()
       executeQuery(
         "select id, hash, apply_script, revert_script from ${schema}${evolutions_table} order by id"
       ) { rs =>
@@ -378,11 +405,10 @@ class DatabaseEvolutions(
       }
     }
 
-    implicit val connection = database.getConnection(autocommit = autocommit)
     checkEvolutionsState()
-
-    var applying           = -1
-    var lastScript: Script = null
+    implicit val connection = database.getConnection(autocommit = autocommit)
+    var applying            = -1
+    var lastScript: Script  = null
 
     try {
       scripts.foreach { script =>
@@ -418,8 +444,10 @@ class DatabaseEvolutions(
           val humanScript = "-- Rev:" + lastScript.evolution.revision + "," + (if (lastScript.isInstanceOf[UpScript])
                                                                                  "Ups"
                                                                                else
-                                                                                 "Downs") + " - " + lastScript.evolution.hash + "\n\n" + (if (lastScript
-                                                                                                                                                .isInstanceOf[UpScript])
+                                                                                 "Downs") + " - " + lastScript.evolution.hash + "\n\n" + (if (
+                                                                                                                                            lastScript
+                                                                                                                                              .isInstanceOf[UpScript]
+                                                                                                                                          )
                                                                                                                                             lastScript.evolution.sql_up
                                                                                                                                           else
                                                                                                                                             lastScript.evolution.sql_down)
@@ -450,7 +478,7 @@ class DatabaseEvolutions(
         val createScript = database.url match {
           case SqlServerJdbcUrl() => CreatePlayEvolutionsSqlServerSql
           case OracleJdbcUrl()    => CreatePlayEvolutionsOracleSql
-          case MysqlJdbcUrl(_)    => CreatePlayEvolutionsMySql
+          case MysqlJdbcUrl(_, _) => CreatePlayEvolutionsMySql
           case DerbyJdbcUrl()     => CreatePlayEvolutionsDerby
           case HsqlJdbcUrl()      => CreatePlayEvolutionsHsql
           case _                  => CreatePlayEvolutionsSql
@@ -490,7 +518,8 @@ class DatabaseEvolutions(
           logger.error(error)
 
           val humanScript =
-            "-- Rev:" + revision + "," + (if (state == "applying_up") "Ups" else "Downs") + " - " + hash + "\n\n" + script
+            "-- Rev:" + revision + "," + (if (state == "applying_up") "Ups"
+                                          else "Downs") + " - " + hash + "\n\n" + script
 
           throw InconsistentDatabase(database.name, humanScript, error, revision, autocommit)
         }
@@ -505,7 +534,7 @@ class DatabaseEvolutions(
 
   def resetScripts(): Seq[Script] = {
     val appliedEvolutions = databaseEvolutions()
-    appliedEvolutions.map(DownScript)
+    appliedEvolutions.map(DownScript.apply)
   }
 
   def resolve(revision: Int): Unit = {
@@ -717,8 +746,34 @@ abstract class ResourceEvolutionsReader extends EvolutionsReader {
  * Read evolution files from the application environment.
  */
 @Singleton
-class EnvironmentEvolutionsReader @Inject() (environment: Environment) extends ResourceEvolutionsReader {
+class EnvironmentEvolutionsReader @Inject() (environment: Environment, evolutionsConfig: EvolutionsConfig)
+    extends ResourceEvolutionsReader {
   import DefaultEvolutionsApi._
+
+  def this(environment: Environment, path: String) = this(
+    environment,
+    new EvolutionsConfig {
+      // Using a dummy evolutions config, however the only config that is relevant here for the EnvironmentEvolutionsReader
+      // is the "path" setting, everything else does not matter actually. Using default values from the reference.conf
+      override def forDatasource(db: String): EvolutionsDatasourceConfig = DefaultEvolutionsDatasourceConfig(
+        true,              // enabled
+        "",                // schema
+        "play_evolutions", // metaTable
+        true,              // autocommit",
+        false,             // useLocks
+        false,             // autoApply
+        false,             // autoApplyDowns
+        false,             // skipApplyDownsOnly
+        "$evolutions{{{",  // substitutions.prefix
+        "}}}",             // substitutions.suffix
+        Map.empty,         // substitutions.mappings
+        true,              // substitutions.escapeEnabled
+        path               // <-- this is all that matters for the EnvironmentEvolutionsReader
+      )
+    }
+  )
+
+  def this(environment: Environment) = this(environment, "evolutions")
 
   def loadResource(db: String, revision: Int): Option[InputStream] = {
     @tailrec def findPaddedRevisionResource(paddedRevision: String, uri: Option[URI]): Option[InputStream] = {
@@ -727,11 +782,17 @@ class EnvironmentEvolutionsReader @Inject() (environment: Environment) extends R
       } else {
         val evolution = {
           // First try a file on the filesystem
-          val filename = Evolutions.fileName(db, paddedRevision)
-          environment.getExistingFile(filename).map(_.toURI)
+          val filename = Evolutions.fileName(db, paddedRevision, evolutionsConfig.forDatasource(db).path)
+          val path     = Path.of(filename)
+          if (path.isAbsolute) {
+            Some(path.toFile).filter(_.exists()).map(_.toURI)
+          } else {
+            // If not an absolute path we try to retrieve it relative to the root path
+            environment.getExistingFile(filename).map(_.toURI)
+          }
         }.orElse {
           // If file was not found, try a resource on the classpath
-          val resourceName = Evolutions.resourceName(db, paddedRevision)
+          val resourceName = Evolutions.resourceName(db, paddedRevision, evolutionsConfig.forDatasource(db).path)
           environment.resource(resourceName).map(url => url.toURI)
         }
 
@@ -789,7 +850,7 @@ object ThisClassLoaderEvolutionsReader
  * Simple map based implementation of the evolutions reader.
  */
 class SimpleEvolutionsReader(evolutionsMap: Map[String, Seq[Evolution]]) extends EvolutionsReader {
-  def evolutions(db: String) = evolutionsMap.getOrElse(db, Nil)
+  def evolutions(db: String): collection.Seq[Evolution] = evolutionsMap.getOrElse(db, Nil)
 }
 
 /**
@@ -841,7 +902,9 @@ case class InconsistentDatabase(db: String, script: String, error: String, rev: 
   private val buttonLabel = if (autocommit) """Mark it resolved""" else """Try again"""
 
   def htmlDescription: String = {
-    <span>An evolution has not been applied properly. Please check the problem and resolve it manually{sentenceEnd} -</span>
+    <span>An evolution has not been applied properly. Please check the problem and resolve it manually{
+      sentenceEnd
+    } -</span>
     <input name="evolution-button" type="button" value={buttonLabel} onclick={redirectJavascript}/>
   }.mkString
 }

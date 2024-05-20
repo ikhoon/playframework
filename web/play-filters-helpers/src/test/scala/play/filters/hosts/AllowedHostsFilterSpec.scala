@@ -5,6 +5,13 @@
 package play.filters.hosts
 
 import javax.inject.Inject
+
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
+
 import com.typesafe.config.ConfigFactory
 import org.specs2.matcher.MatchResult
 import play.api.http.HeaderNames
@@ -12,10 +19,10 @@ import play.api.http.HttpErrorHandler
 import play.api.http.HttpFilters
 import play.api.inject._
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.ws.WSClient
-import play.api.mvc.Results._
+import play.api.libs.ws._
 import play.api.mvc._
 import play.api.mvc.Handler.Stage
+import play.api.mvc.Results._
 import play.api.routing.HandlerDef
 import play.api.routing.Router
 import play.api.routing.SimpleRouterImpl
@@ -26,15 +33,9 @@ import play.api.Application
 import play.api.Configuration
 import play.api.Environment
 
-import scala.jdk.CollectionConverters._
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.reflect.ClassTag
-
 object AllowedHostsFilterSpec {
   class Filters @Inject() (allowedHostsFilter: AllowedHostsFilter) extends HttpFilters {
-    def filters = Seq(allowedHostsFilter)
+    def filters: Seq[EssentialFilter] = Seq(allowedHostsFilter)
   }
 
   case class ActionHandler(result: RequestHeader => Result) extends (RequestHeader => Result) {
@@ -48,7 +49,6 @@ object AllowedHostsFilterSpec {
 }
 
 class AllowedHostsFilterSpec extends PlaySpecification {
-  sequential
 
   import AllowedHostsFilterSpec._
 
@@ -86,10 +86,9 @@ class AllowedHostsFilterSpec extends PlaySpecification {
     running(app)(block(app))
   }
 
-  val TestServerPort = 8192
-  def withServer[T](result: RequestHeader => Result, config: String)(block: WSClient => T): T = {
+  def withServer[T](result: RequestHeader => Result, config: String)(block: (WSClient, Int) => T): T = {
     val app = newApplication(result, config)
-    running(TestServer(TestServerPort, app))(block(app.injector.instanceOf[WSClient]))
+    runningWithPort(TestServer(testServerPort, app))(port => block(app.injector.instanceOf[WSClient], port))
   }
 
   def inject[T: ClassTag](implicit app: Application) =
@@ -97,14 +96,14 @@ class AllowedHostsFilterSpec extends PlaySpecification {
 
   def withActionServer[T](
       config: String
-  )(router: Application => PartialFunction[(String, String), Handler])(block: WSClient => T): T = {
-    implicit val app = GuiceApplicationBuilder()
+  )(router: Application => PartialFunction[(String, String), Handler])(block: (WSClient, Int) => T): T = {
+    implicit val app: Application = GuiceApplicationBuilder()
       .configure(Configuration(ConfigFactory.parseString(config)))
       .appRoutes(app => router(app))
       .overrides(bind[HttpFilters].to[Filters])
       .build()
     val ws = inject[WSClient]
-    running(TestServer(testServerPort, app))(block(ws))
+    runningWithPort(TestServer(testServerPort, app))(port => block(ws, port))
   }
 
   def statusBadRequest(app: Application, hostHeader: String, uri: String = "/"): MatchResult[String] = {
@@ -116,7 +115,7 @@ class AllowedHostsFilterSpec extends PlaySpecification {
   "the allowed hosts filter" should {
     "disallow non-local hosts with default config" in withApplication(okWithHost, "") { app =>
       status(request(app, "localhost")) must_== OK
-      statusBadRequest(app, "typesafe.com")
+      statusBadRequest(app, "example.com")
       statusBadRequest(app, "")
     }
 
@@ -194,19 +193,25 @@ class AllowedHostsFilterSpec extends PlaySpecification {
       status(request(app, "example.com:8080")) must_== OK
     }
 
-    "support matching all hosts" in withApplication(okWithHost, """
-                                                                  |play.filters.hosts.allowed = ["."]
-      """.stripMargin) { app =>
+    "support matching all hosts" in withApplication(
+      okWithHost,
+      """
+        |play.filters.hosts.allowed = ["."]
+      """.stripMargin
+    ) { app =>
       status(request(app, "example.net")) must_== OK
       status(request(app, "amazon.com")) must_== OK
       status(request(app, "")) must_== OK
     }
 
-    // See http://www.skeletonscribe.net/2013/05/practical-http-host-header-attacks.html
+    // See https://www.skeletonscribe.net/2013/05/practical-http-host-header-attacks.html
 
-    "not allow malformed ports" in withApplication(okWithHost, """
-                                                                 |play.filters.hosts.allowed = [".mozilla.org"]
-      """.stripMargin) { app =>
+    "not allow malformed ports" in withApplication(
+      okWithHost,
+      """
+        |play.filters.hosts.allowed = [".mozilla.org"]
+      """.stripMargin
+    ) { app =>
       statusBadRequest(app, "addons.mozilla.org:@passwordreset.net")
       statusBadRequest(app, "addons.mozilla.org: www.securepasswordreset.com")
     }
@@ -217,7 +222,9 @@ class AllowedHostsFilterSpec extends PlaySpecification {
         |play.filters.hosts.allowed = [".mozilla.org"]
       """.stripMargin
     ) { app =>
-      status(request(app, "www.securepasswordreset.com", "https://addons.mozilla.org/en-US/firefox/users/pwreset")) must_== OK
+      status(
+        request(app, "www.securepasswordreset.com", "https://addons.mozilla.org/en-US/firefox/users/pwreset")
+      ) must_== OK
       statusBadRequest(app, "addons.mozilla.org", "https://www.securepasswordreset.com/en-US/firefox/users/pwreset")
     }
 
@@ -226,11 +233,11 @@ class AllowedHostsFilterSpec extends PlaySpecification {
       """
         |play.filters.hosts.allowed = ["localhost"]
       """.stripMargin
-    ) { ws =>
-      val wsRequest  = ws.url(s"http://localhost:$TestServerPort").addHttpHeaders(X_FORWARDED_HOST -> "evil.com").get()
+    ) { (ws, port) =>
+      val wsRequest  = ws.url(s"http://localhost:$port").addHttpHeaders(X_FORWARDED_HOST -> "evil.com").get()
       val wsResponse = Await.result(wsRequest, 5.seconds)
       wsResponse.status must_== OK
-      wsResponse.body must_== s"localhost:$TestServerPort"
+      wsResponse.body[String] must_== s"localhost:$port"
     }
 
     "protect untagged routes when using a route modifier whiteList" in withApplication(
@@ -273,9 +280,9 @@ class AllowedHostsFilterSpec extends PlaySpecification {
               )
             }
           }
-      }) { ws =>
+      }) { (ws, port) =>
         await(
-          ws.url("http://localhost:" + testServerPort + "/foo")
+          ws.url("http://localhost:" + port + "/foo")
             .withHttpHeaders("Host" -> "evil.com")
             .get()
         ).status mustEqual OK
@@ -313,14 +320,14 @@ class AllowedHostsFilterSpec extends PlaySpecification {
               )
             }
           }
-      }) { ws =>
+      }) { (ws, port) =>
         await(
-          ws.url("http://localhost:" + testServerPort + "/foo")
+          ws.url("http://localhost:" + port + "/foo")
             .withHttpHeaders("Host" -> "good.com")
             .get()
         ).status mustEqual OK
         await(
-          ws.url("http://localhost:" + testServerPort + "/foo")
+          ws.url("http://localhost:" + port + "/foo")
             .withHttpHeaders("Host" -> "evil.com")
             .get()
         ).status mustEqual BAD_REQUEST
@@ -337,6 +344,18 @@ class AllowedHostsFilterSpec extends PlaySpecification {
       status(request(app, "good.com")) must_== OK
       status(request(app, "evil.com")) must_== OK
     }
+
+    "protect untagged routes when route modifier blackList and whiteList are empty" in withApplication(
+      okWithHost,
+      """
+        |play.filters.hosts.allowed = [good.com]
+        |play.filters.hosts.routeModifiers.whiteList = []
+        |play.filters.hosts.routeModifiers.blackList = []
+        |""".stripMargin
+    ) { app =>
+      status(request(app, "good.com")) must_== OK
+      status(request(app, "evil.com")) must_== BAD_REQUEST
+    }
   }
 }
 
@@ -350,6 +369,6 @@ class CustomErrorHandler extends HttpErrorHandler {
           .getOrElse("<not set>") + " / " + message
       )
     )
-  def onServerError(request: RequestHeader, exception: Throwable) =
+  def onServerError(request: RequestHeader, exception: Throwable): Future[Result] =
     Future.successful(Results.BadRequest)
 }

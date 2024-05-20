@@ -124,7 +124,7 @@ class DatabasesSpec extends Specification {
       }
     }
 
-    "manual setup trasaction isolation level" in new WithDatabase {
+    "manual setup transaction isolation level" in new WithDatabase {
       val db = Databases.inMemory(name = "test-manualSetupTrasactionIsolationLevel")
 
       db.withTransaction(TransactionIsolationLevel.Serializable) { c =>
@@ -154,6 +154,6 @@ class DatabasesSpec extends Specification {
 
   trait WithDatabase extends After {
     def db: Database
-    def after = () //db.shutdown()
+    def after: Unit = () // db.shutdown()
   }
 }

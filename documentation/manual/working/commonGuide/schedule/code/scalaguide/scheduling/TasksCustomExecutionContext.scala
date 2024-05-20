@@ -2,15 +2,17 @@
  * Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
-//###replace: package tasks
+// ###replace: package tasks
 package scalaguide.scheduling
 
+// format: off
 import scala.concurrent.duration._
+// format: on
 
 //#custom-task-execution-context
 import javax.inject.Inject
 
-import akka.actor.ActorSystem
+import org.apache.pekko.actor.ActorSystem
 import play.api.libs.concurrent.CustomExecutionContext
 
 class TasksCustomExecutionContext @Inject() (actorSystem: ActorSystem)

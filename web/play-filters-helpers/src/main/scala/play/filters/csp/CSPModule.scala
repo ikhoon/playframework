@@ -4,10 +4,11 @@
 
 package play.filters.csp
 
-import akka.stream.Materializer
 import javax.inject._
-import play.api.Configuration
+
+import org.apache.pekko.stream.Materializer
 import play.api.inject._
+import play.api.Configuration
 
 /**
  * Provider for Content Security Policy configuration.
@@ -35,8 +36,6 @@ class CSPModule
  * The content security policy components, for compile time dependency injection.
  */
 trait CSPComponents extends play.api.BuiltInComponents {
-  implicit def materializer: Materializer
-
   def configuration: Configuration
 
   lazy val cspConfig: CSPConfig       = CSPConfig.fromConfiguration(configuration)

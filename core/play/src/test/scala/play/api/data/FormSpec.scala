@@ -4,17 +4,18 @@
 
 package play.api.data
 
-import play.api.Configuration
-import play.api.Environment
-import play.api.data.Forms._
-import play.api.data.validation.Constraints._
+import org.specs2.mutable.Specification
 import play.api.data.format.Formats._
+import play.api.data.validation.Constraints._
+import play.api.data.Forms._
+import play.api.http.HttpConfiguration
 import play.api.i18n._
 import play.api.libs.json.Json
-import org.specs2.mutable.Specification
-import play.api.http.HttpConfiguration
 import play.api.libs.Files.TemporaryFile
 import play.api.mvc.MultipartFormData
+import play.api.mvc.Request
+import play.api.Configuration
+import play.api.Environment
 import play.core.test.FakeRequest
 
 class FormSpec extends Specification {
@@ -51,7 +52,7 @@ class FormSpec extends Specification {
         badParts = Seq.empty
       )
 
-      implicit val request = FakeRequest(method = "POST", "/").withMultipartFormDataBody(multipartBody)
+      implicit val request: Request[?] = FakeRequest(method = "POST", "/").withMultipartFormDataBody(multipartBody)
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
       f1.errors must beEmpty
@@ -59,7 +60,7 @@ class FormSpec extends Specification {
     }
 
     "query params ignored when using POST" in {
-      implicit val request = FakeRequest(method = "POST", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "POST", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -68,7 +69,7 @@ class FormSpec extends Specification {
     }
 
     "query params ignored when using PUT" in {
-      implicit val request = FakeRequest(method = "PUT", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "PUT", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -77,7 +78,7 @@ class FormSpec extends Specification {
     }
 
     "query params ignored when using PATCH" in {
-      implicit val request = FakeRequest(method = "PATCH", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "PATCH", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -86,7 +87,7 @@ class FormSpec extends Specification {
     }
 
     "query params NOT ignored when using GET" in {
-      implicit val request = FakeRequest(method = "GET", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "GET", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -95,7 +96,7 @@ class FormSpec extends Specification {
     }
 
     "query params NOT ignored when using DELETE" in {
-      implicit val request = FakeRequest(method = "DELETE", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "DELETE", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -104,7 +105,7 @@ class FormSpec extends Specification {
     }
 
     "query params NOT ignored when using HEAD" in {
-      implicit val request = FakeRequest(method = "HEAD", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "HEAD", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -113,7 +114,7 @@ class FormSpec extends Specification {
     }
 
     "query params NOT ignored when using OPTIONS" in {
-      implicit val request = FakeRequest(method = "OPTIONS", "/?email=bob%40marley.com&name=john")
+      implicit val request: Request[?] = FakeRequest(method = "OPTIONS", "/?email=bob%40marley.com&name=john")
         .withFormUrlEncodedBody("email" -> "michael@jackson.com")
 
       val f1 = ScalaForms.updateForm.bindFromRequest()
@@ -401,20 +402,24 @@ class FormSpec extends Specification {
       .withGlobalError("some.error")
       .bind(Map("value" -> "some value"))
       .errors
-      .headOption must beSome.like {
-      case error => error.message must equalTo("some.error")
-    }
+      .headOption must beSome[FormError].which { error => error.message must beTypedEqualTo("some.error") }
   }
 
   "find nested error on unbind" in {
     case class Item(text: String)
+    object Item {
+      def unapply(i: Item): Some[String] = Some(i.text)
+    }
     case class Items(seq: Seq[Item])
+    object Items {
+      def unapply(i: Items): Some[Seq[Item]] = Some(i.seq)
+    }
     val itemForm = Form[Items](
       mapping(
         "seq" -> seq(
-          mapping("text" -> nonEmptyText)(Item)(Item.unapply)
+          mapping("text" -> nonEmptyText)(Item.apply)(Item.unapply)
         )
-      )(Items)(Items.unapply)
+      )(Items.apply)(Items.unapply)
     )
 
     val filled = itemForm.fillAndValidate(Items(Seq(Item(""))))
@@ -464,42 +469,42 @@ class FormSpec extends Specification {
   "render form using java.time.LocalDate" in {
     import java.time.LocalDate
     val dateForm = Form("date" -> localDate)
-    val data     = Map("date"  -> "2012-01-01")
+    val data     = Map("date" -> "2012-01-01")
     dateForm.bind(data).get must beEqualTo(LocalDate.of(2012, 1, 1))
   }
 
   "render form using java.time.LocalDate with format(15/6/2016)" in {
     import java.time.LocalDate
     val dateForm = Form("date" -> localDate("dd/MM/yyyy"))
-    val data     = Map("date"  -> "15/06/2016")
+    val data     = Map("date" -> "15/06/2016")
     dateForm.bind(data).get must beEqualTo(LocalDate.of(2016, 6, 15))
   }
 
   "render form using java.time.LocalDateTime" in {
     import java.time.LocalDateTime
     val dateForm = Form("date" -> localDateTime)
-    val data     = Map("date"  -> "2012-01-01 10:10:10")
+    val data     = Map("date" -> "2012-01-01 10:10:10")
     dateForm.bind(data).get must beEqualTo(LocalDateTime.of(2012, 1, 1, 10, 10, 10))
   }
 
   "render form using java.time.LocalDateTime with format(17/06/2016T17:15:33)" in {
     import java.time.LocalDateTime
     val dateForm = Form("date" -> localDateTime("dd/MM/yyyy HH:mm:ss"))
-    val data     = Map("date"  -> "17/06/2016 10:10:10")
+    val data     = Map("date" -> "17/06/2016 10:10:10")
     dateForm.bind(data).get must beEqualTo(LocalDateTime.of(2016, 6, 17, 10, 10, 10))
   }
 
   "render form using java.time.LocalTime" in {
     import java.time.LocalTime
     val dateForm = Form("date" -> localTime)
-    val data     = Map("date"  -> "10:10:10")
+    val data     = Map("date" -> "10:10:10")
     dateForm.bind(data).get must beEqualTo(LocalTime.of(10, 10, 10))
   }
 
   "render form using java.time.LocalTime with format(HH-mm-ss)" in {
     import java.time.LocalTime
     val dateForm = Form("date" -> localTime("HH-mm-ss"))
-    val data     = Map("date"  -> "10-11-12")
+    val data     = Map("date" -> "10-11-12")
     dateForm.bind(data).get must beEqualTo(LocalTime.of(10, 11, 12))
   }
 
@@ -548,6 +553,9 @@ object ScalaForms {
   val booleanForm = Form("accepted" -> Forms.boolean)
 
   case class User(name: String, age: Int)
+  object User {
+    def unapply(arg: User): Some[(String, Int)] = Some((arg.name, arg.age))
+  }
 
   val userForm = Form(
     mapping(

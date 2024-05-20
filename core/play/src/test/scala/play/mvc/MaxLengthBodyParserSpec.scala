@@ -4,30 +4,31 @@
 
 package play.mvc
 
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.javadsl.Source
-import akka.util.ByteString
-import com.typesafe.config.ConfigFactory
-import org.specs2.matcher.MustMatchers
-import org.specs2.mutable.Specification
-import org.specs2.specification.AfterAll
-import org.specs2.specification.core.Fragment
-import play.api.Environment
-import play.api.Mode
-import play.api.http.HeaderNames
-import play.api.http.Status
-import play.api.mvc.PlayBodyParsers
-import play.libs.streams.Accumulator
-import play.http.DefaultHttpErrorHandler
-import play.libs.F
+import java.util.concurrent.TimeUnit
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 import scala.language.existentials
+import scala.language.postfixOps
+
+import com.typesafe.config.ConfigFactory
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.javadsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.specs2.matcher.MustMatchers
+import org.specs2.mutable.Specification
+import org.specs2.specification.core.Fragment
+import org.specs2.specification.AfterAll
+import play.api.http.HeaderNames
+import play.api.http.Status
+import play.api.mvc.PlayBodyParsers
+import play.api.Environment
+import play.api.Mode
+import play.http.DefaultHttpErrorHandler
+import play.libs.streams.Accumulator
+import play.libs.F
 
 class MaxLengthBodyParserSpec extends Specification with AfterAll with MustMatchers {
   "Java MaxLengthBodyParserSpec" title
@@ -55,20 +56,23 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll with MustMatch
       ai: AtomicInteger = new AtomicInteger
   ): A = {
     accumulator
-      .run(Source.fromIterator[ByteString](() => {
-        ai.incrementAndGet()
-        food.grouped(3).asJava
-      }), materializer)
+      .run(
+        Source.fromIterator[ByteString](() => {
+          ai.incrementAndGet()
+          food.grouped(3).asJava
+        }),
+        materializer
+      )
       .toCompletableFuture
       .get(5, TimeUnit.SECONDS)
   }
 
-  def maxLengthEnforced(result: F.Either[Result, _]) = {
+  def maxLengthEnforced(result: F.Either[Result, ?]) = {
     result.left.toScala.map(_.status) must beSome(Status.REQUEST_ENTITY_TOO_LARGE)
     result.right.toScala must beNone
   }
 
-  val bodyParsers: Seq[(BodyParser[_], Option[String], ByteString)] = Seq(
+  val bodyParsers: Seq[(BodyParser[?], Option[String], ByteString)] = Seq(
     // Tuple3: (bodyParser with maxLength of 15, Content-Type header, 15 bytes to feed the parser)
     (new BodyParser.Text(15, defaultHttpErrorHandler), Some("text/plain"), Body15),
     (new BodyParser.TolerantText(15, defaultHttpErrorHandler), None, Body15),

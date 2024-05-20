@@ -96,10 +96,10 @@ $ heroku logs
 2015-07-13T20:44:47.358320+00:00 heroku[web.1]: Starting process with command `target/universal/stage/bin/myapp -Dhttp.port=${PORT}`
 2015-07-13T20:44:49.750860+00:00 app[web.1]: Picked up JAVA_TOOL_OPTIONS: -Xmx384m -Xss512k -Dfile.encoding=UTF-8
 2015-07-13T20:44:52.297033+00:00 app[web.1]: [warn] application - Logger configuration in conf files is deprecated and has no effect. Use a logback configuration file instead.
-2015-07-13T20:44:54.960105+00:00 app[web.1]: [info] p.a.l.c.ActorSystemProvider - Starting application default Akka system: application
+2015-07-13T20:44:54.960105+00:00 app[web.1]: [info] p.a.l.c.ActorSystemProvider - Starting application default Pekko system: application
 2015-07-13T20:44:55.066582+00:00 app[web.1]: [info] play.api.Play$ - Application started (Prod)
 2015-07-13T20:44:55.445021+00:00 heroku[web.1]: State changed from starting to up
-2015-07-13T20:44:55.330940+00:00 app[web.1]: [info] p.c.s.AkkaHttpServer - Listening for HTTP on /0:0:0:0:0:0:0:0:9000
+2015-07-13T20:44:55.330940+00:00 app[web.1]: [info] p.c.s.PekkoHttpServer - Listening for HTTP on /0:0:0:0:0:0:0:0:9000
 ...
 ```
 
@@ -110,10 +110,10 @@ $ heroku logs -t --app warm-frost-1289
 2015-07-13T20:44:47.358320+00:00 heroku[web.1]: Starting process with command `target/universal/stage/bin/myapp -Dhttp.port=${PORT}`
 2015-07-13T20:44:49.750860+00:00 app[web.1]: Picked up JAVA_TOOL_OPTIONS: -Xmx384m -Xss512k -Dfile.encoding=UTF-8
 2015-07-13T20:44:52.297033+00:00 app[web.1]: [warn] application - Logger configuration in conf files is deprecated and has no effect. Use a logback configuration file instead.
-2015-07-13T20:44:54.960105+00:00 app[web.1]: [info] p.a.l.c.ActorSystemProvider - Starting application default Akka system: application
+2015-07-13T20:44:54.960105+00:00 app[web.1]: [info] p.a.l.c.ActorSystemProvider - Starting application default Pekko system: application
 2015-07-13T20:44:55.066582+00:00 app[web.1]: [info] play.api.Play$ - Application started (Prod)
 2015-07-13T20:44:55.445021+00:00 heroku[web.1]: State changed from starting to up
-2015-07-13T20:44:55.330940+00:00 app[web.1]: [info] p.c.s.AkkaHttpServer - Listening for HTTP on /0:0:0:0:0:0:0:0:9000
+2015-07-13T20:44:55.330940+00:00 app[web.1]: [info] p.c.s.PekkoHttpServer - Listening for HTTP on /0:0:0:0:0:0:0:0:9000
 ...
 ```
 
@@ -138,7 +138,7 @@ The [Scala buildpack](https://github.com/heroku/heroku-buildpack-scala) will use
 
 Heroku uses OpenJDK 8 to run Java applications by default. It cannot automatically determine if another version is needed, so deploying an application that uses newer java version leads to a compilation error on the server. If you use a newer version than Java 8, you should declare it in your `system.properties` file in the project root directory, for example:
 ```txt
-java.runtime.version=11
+java.runtime.version=17
 ```
 
 See the [heroku documentation](https://devcenter.heroku.com/articles/java-support#specifying-a-java-version) for more details.

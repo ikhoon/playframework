@@ -1,0 +1,32 @@
+name: Dependency Graph
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # Only run once for latest commit per ref and cancel other (previous) runs.
+  group: dependency-graph-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # this permission is needed to submit the dependency graph
+
+jobs:
+  dependency-graph:
+    name: Submit dependencies to GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: scalacenter/sbt-dependency-submission@v2
+        with:
+          # We submit ./documentation/build.sbt because the documentation project depends on the root project(s)
+          # anyway. In the end, all projects will be checked (including the dependencies of the documentation project).
+          working-directory: './documentation/'

@@ -8,31 +8,28 @@ import java.net.URLDecoder
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration.Duration
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.util.Failure
 
-import akka.stream.Materializer
-import akka.stream.scaladsl._
-import akka.stream.Attributes
-import akka.stream.FlowShape
-import akka.stream.Inlet
-import akka.stream.IOResult
-import akka.stream.Outlet
-import akka.stream.stage._
-import akka.util.ByteString
-
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.stream.Attributes
+import org.apache.pekko.stream.FlowShape
+import org.apache.pekko.stream.IOResult
+import org.apache.pekko.stream.Inlet
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.stream.Outlet
+import org.apache.pekko.util.ByteString
+import play.api.http.HttpErrorHandler
+import play.api.http.Status._
+import play.api.libs.streams.Accumulator
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.Files.TemporaryFileCreator
-import play.api.libs.streams.Accumulator
 import play.api.mvc._
 import play.api.mvc.MultipartFormData._
-import play.api.http.Status._
-import play.api.http.HttpErrorHandler
-
 import play.core.Execution.Implicits.trampoline
-
-import scala.concurrent.duration.Duration
 
 /**
  * Utilities for handling multipart bodies
@@ -52,7 +49,7 @@ object Multipart {
    */
   @deprecated("Use the overloaded partParser method that takes the allowEmptyFiles flag", "2.9.0")
   def partParser[A](maxMemoryBufferSize: Long, errorHandler: HttpErrorHandler)(
-      partHandler: Accumulator[Part[Source[ByteString, _]], Either[Result, A]]
+      partHandler: Accumulator[Part[Source[ByteString, ?]], Either[Result, A]]
   )(implicit mat: Materializer): BodyParser[A] = partParser(maxMemoryBufferSize, false, errorHandler)(partHandler)
 
   /**
@@ -64,7 +61,7 @@ object Multipart {
    * @param partHandler The accumulator to handle the parts.
    */
   def partParser[A](maxMemoryBufferSize: Long, allowEmptyFiles: Boolean, errorHandler: HttpErrorHandler)(
-      partHandler: Accumulator[Part[Source[ByteString, _]], Either[Result, A]]
+      partHandler: Accumulator[Part[Source[ByteString, ?]], Either[Result, A]]
   )(implicit mat: Materializer): BodyParser[A] = BodyParser { request =>
     val maybeBoundary = for {
       mt         <- request.mediaType
@@ -79,8 +76,8 @@ object Multipart {
           .splitWhen(_.isLeft)
           .prefixAndTail(1)
           .map {
-            case (Seq(Left(part: FilePart[_])), body) =>
-              part.copy[Source[ByteString, _]](
+            case (Seq(Left(part: FilePart[?])), body) =>
+              part.copy[Source[ByteString, ?]](
                 ref = body.collect {
                   case Right(bytes) => bytes
                 },
@@ -88,7 +85,7 @@ object Multipart {
                   byteSource => Some(Await.result(byteSource.runFold(ByteString.empty)(_ ++ _), Duration.Inf))
               )
             case (Seq(Left(other)), ignored) =>
-              // If we don't run the source, it takes Akka streams 5 seconds to wake up and realise the source is empty
+              // If we don't run the source, it takes Pekko streams 5 seconds to wake up and realise the source is empty
               // before it progresses onto the next element
               ignored.runWith(Sink.cancelled)
               other.asInstanceOf[Part[Nothing]]
@@ -133,11 +130,11 @@ object Multipart {
       errorHandler: HttpErrorHandler
   )(implicit mat: Materializer): BodyParser[MultipartFormData[A]] = BodyParser { request =>
     partParser(maxMemoryBufferSize, allowEmptyFiles, errorHandler) {
-      val handleFileParts = Flow[Part[Source[ByteString, _]]].mapAsync(1) {
-        case filePart: FilePart[Source[ByteString, _]] =>
+      val handleFileParts = Flow[Part[Source[ByteString, ?]]].mapAsync(1) {
+        case filePart: FilePart[Source[ByteString, ?]] =>
           filePartHandler(FileInfo(filePart.key, filePart.filename, filePart.contentType, filePart.dispositionType))
             .run(filePart.ref)
-        case other: Part[_] => Future.successful(other.asInstanceOf[Part[Nothing]])
+        case other: Part[?] => Future.successful(other.asInstanceOf[Part[Nothing]])
       }
 
       val multipartAccumulator = Accumulator(Sink.fold[Seq[Part[A]], Part[A]](Vector.empty)(_ :+ _)).mapFuture {
@@ -184,15 +181,19 @@ object Multipart {
     case FileInfo(partName, filename, contentType, dispositionType) =>
       val tempFile = temporaryFileCreator.create("multipartBody", "asTemporaryFile")
       Accumulator(FileIO.toPath(tempFile.path)).mapFuture {
-        case IOResult(_, Failure(error)) => Future.failed(error)
-        case IOResult(count, _) =>
+        // Can't use unapply in Scala 3 here as long as we use the .cross(CrossVersion.for3Use2_13) workaround for pekko-http
+        // That's because Scala 3 changed the unapply signature/behaviour and here we try to call unapply of a Scala 2 artifacts
+        // from a Scala 3 artifact, which results in:
+        // [error] java.lang.NoSuchMethodError: 'org.apache.pekko.stream.IOResult org.apache.pekko.stream.IOResult$.unapply(org.apache.pekko.stream.IOResult)'
+        case r: IOResult if r.status.isFailure => Future.failed(r.status.failed.get)
+        case r: IOResult if r.status.isSuccess =>
           Future.successful(
             FilePart(
               partName,
               filename,
               contentType,
               tempFile,
-              count,
+              r.count,
               dispositionType,
               tf => Some(ByteString.fromArray(java.nio.file.Files.readAllBytes(tf.path)))
             )
@@ -250,21 +251,22 @@ object Multipart {
 
     def unapply(headers: Map[String, String]): Option[(String, String, Option[String], String)] = {
       for {
-        values <- headers
-          .get("content-disposition")
-          .map(
-            split(_).iterator
-              .map(_.trim)
-              .map {
-                // unescape escaped quotes
-                case KeyValue(key, v) =>
-                  (key, v.trim.replaceAll("""\\"""", "\""))
-                case ExtendedKeyValue(key, encoding, value) =>
-                  (key, URLDecoder.decode(value, encoding))
-                case key => (key.trim, "")
-              }
-              .toMap
-          )
+        values <-
+          headers
+            .get("content-disposition")
+            .map(
+              split(_).iterator
+                .map(_.trim)
+                .map {
+                  // unescape escaped quotes
+                  case KeyValue(key, v) =>
+                    (key, v.trim.replaceAll("""\\"""", "\""))
+                  case ExtendedKeyValue(key, encoding, value) =>
+                    (key, URLDecoder.decode(value, encoding))
+                  case key => (key.trim, "")
+                }
+                .toMap
+            )
 
         dispositionType <- values.keys.find(key => key == "form-data" || key == "file")
         partName        <- values.get("name")
@@ -277,19 +279,20 @@ object Multipart {
   private[play] object PartInfoMatcher {
     def unapply(headers: Map[String, String]): Option[String] = {
       for {
-        values <- headers
-          .get("content-disposition")
-          .map(
-            _.split(";").iterator
-              .map(_.trim)
-              .map {
-                case KeyValue(key, v) => (key, v)
-                case ExtendedKeyValue(key, encoding, value) =>
-                  (key, URLDecoder.decode(value, encoding))
-                case key => (key.trim, "")
-              }
-              .toMap
-          )
+        values <-
+          headers
+            .get("content-disposition")
+            .map(
+              _.split(";").iterator
+                .map(_.trim)
+                .map {
+                  case KeyValue(key, v) => (key, v)
+                  case ExtendedKeyValue(key, encoding, value) =>
+                    (key, URLDecoder.decode(value, encoding))
+                  case key => (key.trim, "")
+                }
+                .toMap
+            )
         _        <- values.get("form-data")
         _        <- Option(values.contains("filename")).filter(_ == false)
         partName <- values.get("name")
@@ -319,7 +322,7 @@ object Multipart {
   }
 
   /**
-   * Copied and then heavily modified to suit Play's needs from Akka HTTP akka.http.impl.engine.BodyPartParser.
+   * Copied and then heavily modified to suit Play's needs from Pekko HTTP pekko.http.impl.engine.BodyPartParser.
    *
    * INTERNAL API
    *
@@ -676,7 +679,7 @@ object Multipart {
   }
 
   /**
-   * Copied from Akka HTTP.
+   * Copied from Pekko HTTP.
    *
    * Straight-forward Boyer-Moore string search implementation.
    */

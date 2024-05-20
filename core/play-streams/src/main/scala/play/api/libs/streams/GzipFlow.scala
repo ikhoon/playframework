@@ -6,11 +6,11 @@ package play.api.libs.streams
 
 import java.util.zip.Deflater
 
-import akka.stream.scaladsl.Compression
-import akka.stream.scaladsl.Flow
-import akka.stream.stage._
-import akka.stream._
-import akka.util.ByteString
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.Compression
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.util.ByteString
 
 /**
  * A simple Gzip Flow
@@ -28,7 +28,7 @@ object GzipFlow {
   def gzip(
       bufferSize: Int = 512,
       compressionLevel: Int = Deflater.DEFAULT_COMPRESSION
-  ): Flow[ByteString, ByteString, _] = {
+  ): Flow[ByteString, ByteString, ?] = {
     Flow[ByteString]
       .via(chunkerIfNeeded(bufferSize))
       .via(Compression.gzip(compressionLevel))
@@ -38,7 +38,7 @@ object GzipFlow {
     if (bufferSize > 0 || bufferSize < Int.MaxValue) Flow.fromGraph(new Chunker(bufferSize))
     else Flow[ByteString]
 
-  // http://doc.akka.io/docs/akka/2.4.14/scala/stream/stream-cookbook.html#Chunking_up_a_stream_of_ByteStrings_into_limited_size_ByteStrings
+  // https://pekko.apache.org/docs/pekko/1.0/stream/stream-cookbook.html#chunking-up-a-stream-of-bytestrings-into-limited-size-bytestrings
   private class Chunker(val chunkSize: Int) extends GraphStage[FlowShape[ByteString, ByteString]] {
     private val in  = Inlet[ByteString]("Chunker.in")
     private val out = Outlet[ByteString]("Chunker.out")
@@ -47,9 +47,12 @@ object GzipFlow {
     override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
       private var buffer = ByteString.empty
 
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = emitChunk()
-      })
+      setHandler(
+        out,
+        new OutHandler {
+          override def onPull(): Unit = emitChunk()
+        }
+      )
       setHandler(
         in,
         new InHandler {

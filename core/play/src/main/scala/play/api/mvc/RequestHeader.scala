@@ -7,6 +7,8 @@ package play.api.mvc
 import java.security.cert.X509Certificate
 import java.util.Locale
 
+import scala.annotation.implicitNotFound
+
 import play.api.http.HeaderNames
 import play.api.http.MediaRange
 import play.api.http.MediaType
@@ -16,8 +18,6 @@ import play.api.libs.typedmap.TypedEntry
 import play.api.libs.typedmap.TypedKey
 import play.api.libs.typedmap.TypedMap
 import play.api.mvc.request._
-
-import scala.annotation.implicitNotFound
 
 /**
  * The HTTP request header. Note that it doesn't contain the request body yet.
@@ -158,7 +158,7 @@ trait RequestHeader {
    * @param e1 The new attribute.
    * @return The new version of this object with the new attribute.
    */
-  def addAttrs(e1: TypedEntry[_]): RequestHeader = withAttrs(attrs + e1)
+  def addAttrs(e1: TypedEntry[?]): RequestHeader = withAttrs(attrs.updated(e1))
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -167,7 +167,7 @@ trait RequestHeader {
    * @param e2 The second new attribute.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_]): RequestHeader = withAttrs(attrs + (e1, e2))
+  def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?]): RequestHeader = withAttrs(attrs.updated(e1, e2))
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -177,7 +177,9 @@ trait RequestHeader {
    * @param e3 The third new attribute.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_], e3: TypedEntry[_]): RequestHeader = withAttrs(attrs + (e1, e2, e3))
+  def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?], e3: TypedEntry[?]): RequestHeader = withAttrs(
+    attrs.updated(e1, e2, e3)
+  )
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -185,8 +187,8 @@ trait RequestHeader {
    * @param entries The new attributes.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(entries: TypedEntry[_]*): RequestHeader =
-    withAttrs(attrs.+(entries: _*))
+  def addAttrs(entries: TypedEntry[?]*): RequestHeader =
+    withAttrs(attrs.updated(entries: _*))
 
   /**
    * Create a new versions of this object with the given attribute removed.
@@ -194,8 +196,8 @@ trait RequestHeader {
    * @param key The key of the attribute to remove.
    * @return The new version of this object with the attribute removed.
    */
-  def removeAttr(key: TypedKey[_]): RequestHeader =
-    withAttrs(attrs - key)
+  def removeAttr(key: TypedKey[?]): RequestHeader =
+    withAttrs(attrs.removed(key))
 
   // -- Computed
 

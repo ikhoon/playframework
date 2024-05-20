@@ -5,23 +5,24 @@
 package play.filters.csrf
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 
-import play.api.Application
+import scala.concurrent.Future
+import scala.jdk.OptionConverters._
+import scala.reflect.ClassTag
+
 import play.api.libs.ws._
+import play.api.Application
 import play.core.j.JavaAction
 import play.core.j.JavaActionAnnotations
 import play.core.j.JavaHandlerComponents
 import play.core.routing.HandlerInvokerFactory
 import play.http.HttpErrorHandler
-import play.mvc.Http.RequestHeader
-import play.mvc.Http.{ Request => JRequest }
 import play.mvc.Controller
+import play.mvc.Http.{ Request => JRequest }
+import play.mvc.Http.RequestHeader
 import play.mvc.Result
 import play.mvc.Results
-
-import scala.jdk.OptionConverters._
-import scala.concurrent.Future
-import scala.reflect.ClassTag
 
 /**
  * Specs for the Java per action CSRF actions
@@ -32,9 +33,9 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
 
   def javaAction[T: ClassTag](method: String, inv: JRequest => Result)(implicit app: Application) =
     new JavaAction(javaHandlerComponents) {
-      val clazz                     = implicitly[ClassTag[T]].runtimeClass
-      def parser                    = HandlerInvokerFactory.javaBodyParserToScala(javaHandlerComponents.getBodyParser(annotations.parser))
-      def invocation(req: JRequest) = CompletableFuture.completedFuture(inv(req))
+      val clazz                                              = implicitly[ClassTag[T]].runtimeClass
+      def parser                                             = HandlerInvokerFactory.javaBodyParserToScala(javaHandlerComponents.getBodyParser(annotations.parser))
+      def invocation(req: JRequest): CompletionStage[Result] = CompletableFuture.completedFuture(inv(req))
       val annotations =
         new JavaActionAnnotations(
           clazz,
@@ -55,7 +56,7 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
           case _ =>
             javaAction[JavaCSRFActionSpec.MyAction]("check", myAction.check)
         }
-      } { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      } { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -63,7 +64,7 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
     def apply[T](makeRequest: (WSRequest) => Future[WSResponse])(handleResponse: (WSResponse) => T) = {
       withActionServer(configuration) { implicit app =>
         { case _ => javaAction[JavaCSRFActionSpec.MyAction]("add", myAction.add) }
-      } { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      } { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -71,7 +72,7 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
     def apply[T](makeRequest: (WSRequest) => Future[WSResponse])(handleResponse: (WSResponse) => T) = {
       withActionServer(configuration) { implicit app =>
         { case _ => javaAction[JavaCSRFActionSpec.MyAction]("withSession", myAction.withSession) }
-      } { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      } { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -79,7 +80,7 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
     "allow adding things to the session when a token is also added to the session" in {
       buildCsrfWithSession()(_.get()) { response =>
         val session = response.cookie(sessionCookieBaker.COOKIE_NAME).map(_.value).map(sessionCookieBaker.decode)
-        session must beSome.which { s =>
+        session must beSome[Map[String, String]].which { s =>
           s.get(TokenName) must beSome[String]
           s.get("hello") must beSome("world")
         }
@@ -89,10 +90,11 @@ class JavaCSRFActionSpec extends CSRFCommonSpecs {
       Seq(
         "play.http.filters" -> "play.filters.csrf.CsrfFilters"
       )
-    ) { implicit app => { case _ => javaAction[JavaCSRFActionSpec.MyAction]("getToken", myAction.getToken) } } { ws =>
-      lazy val token = signedTokenProvider.generateToken
-      val returned   = await(ws.url("http://localhost:" + testServerPort).withSession(TokenName -> token).get()).body
-      signedTokenProvider.compareTokens(token, returned) must beTrue
+    ) { implicit app => { case _ => javaAction[JavaCSRFActionSpec.MyAction]("getToken", myAction.getToken) } } {
+      (ws, port) =>
+        lazy val token = signedTokenProvider.generateToken
+        val returned   = await(ws.url("http://localhost:" + port).withSession(TokenName -> token).get()).body
+        signedTokenProvider.compareTokens(token, returned) must beTrue
     }
   }
 }
@@ -138,7 +140,7 @@ object JavaCSRFActionSpec {
   }
 
   class CustomErrorHandler extends CSRFErrorHandler {
-    def handle(req: RequestHeader, msg: String) = {
+    def handle(req: RequestHeader, msg: String): CompletionStage[Result] = {
       CompletableFuture.completedFuture(
         Results.unauthorized(
           "Origin: " + req

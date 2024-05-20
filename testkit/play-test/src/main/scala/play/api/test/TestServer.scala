@@ -4,12 +4,12 @@
 
 package play.api.test
 
-import akka.annotation.ApiMayChange
+import scala.util.control.NonFatal
+
+import org.apache.pekko.annotation.ApiMayChange
 import play.api._
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.core.server._
-
-import scala.util.control.NonFatal
 
 /**
  * A test web server.
@@ -69,6 +69,11 @@ case class TestServer(config: ServerConfig, application: Application, serverProv
   }
 
   /**
+   * The address that the server is running on.
+   */
+  def runningAddress: String = getTestServerIfRunning.mainAddress.getAddress.getHostAddress
+
+  /**
    * The HTTP port that the server is running on.
    */
   def runningHttpPort: Option[Int] = getTestServerIfRunning.httpPort
@@ -82,7 +87,7 @@ case class TestServer(config: ServerConfig, application: Application, serverProv
    * True if the server is running either on HTTP or HTTPS port.
    */
   @ApiMayChange
-  def isRunning: Boolean = runningHttpPort.nonEmpty || runningHttpsPort.nonEmpty
+  def isRunning: Boolean = server != null && (runningHttpPort.nonEmpty || runningHttpsPort.nonEmpty)
 }
 
 object TestServer {
@@ -101,7 +106,13 @@ object TestServer {
       sslPort: Option[Int] = None,
       serverProvider: Option[ServerProvider] = None
   ) = new TestServer(
-    ServerConfig(port = Some(port), sslPort = sslPort, mode = Mode.Test, rootDir = application.path),
+    ServerConfig(
+      address = Helpers.testServerAddress,
+      port = Some(port),
+      sslPort = sslPort,
+      mode = Mode.Test,
+      rootDir = application.path
+    ),
     application,
     serverProvider
   )
@@ -124,10 +135,10 @@ private[play] class TestServerProcess extends ServerProcess {
     for (h <- hooks) h.apply()
   }
 
-  override def classLoader = getClass.getClassLoader
-  override def args        = Seq()
-  override def properties  = System.getProperties
-  override def pid         = None
+  override def classLoader         = getClass.getClassLoader
+  override def args: Seq[String]   = Seq()
+  override def properties          = System.getProperties
+  override def pid: Option[String] = None
 
   override def exit(message: String, cause: Option[Throwable] = None, returnCode: Int = -1): Nothing = {
     throw new TestServerExitException(message, cause, returnCode)

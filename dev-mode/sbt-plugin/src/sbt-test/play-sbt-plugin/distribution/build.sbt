@@ -3,9 +3,9 @@
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala)
   .settings(
-    name := "dist-sample",
-    version := "1.0-SNAPSHOT",
-    scalaVersion := ScriptedTools.scalaVersionFromJavaProperties(),
+    name          := "dist-sample",
+    version       := "1.0-SNAPSHOT",
+    scalaVersion  := ScriptedTools.scalaVersionFromJavaProperties(),
     updateOptions := updateOptions.value.withLatestSnapshots(false),
     update / evictionWarningOptions ~= (_.withWarnTransitiveEvictions(false).withWarnDirectEvictions(false)),
     PlayKeys.playInteractionMode := play.sbt.StaticPlayNonBlockingInteractionMode,
@@ -25,7 +25,7 @@ checkStartScript := {
   }
   val contents = IO.read(startScript)
   val lines    = IO.readLines(startScript)
-  if (!contents.contains("app_mainclass=(play.core.server.ProdServerStart)")) {
+  if (!contents.contains("app_mainclass=('play.core.server.ProdServerStart')")) {
     startScriptError(contents, "Cannot find the declaration of the main class in the script")
   }
   val appClasspath = lines
@@ -58,9 +58,8 @@ def retry[B](max: Int = 20, sleep: Long = 500, current: Int = 1)(block: => B): B
 
 InputKey[Unit]("checkConfig") := {
   val expected = Def.spaceDelimited().parsed.head
-  import java.net.URL
   val config = retry() {
-    IO.readLinesURL(new URL("http://localhost:9000/config")).mkString("\n")
+    IO.readLinesURL(url("http://localhost:9000/config")).mkString("\n")
   }
   if (expected != config) {
     sys.error(s"Expected config $expected but got $config")
@@ -69,9 +68,8 @@ InputKey[Unit]("checkConfig") := {
 
 InputKey[Unit]("countApplicationConf") := {
   val expected = Def.spaceDelimited().parsed.head
-  import java.net.URL
   val count = retry() {
-    IO.readLinesURL(new URL("http://localhost:9000/countApplicationConf")).mkString("\n")
+    IO.readLinesURL(url("http://localhost:9000/countApplicationConf")).mkString("\n")
   }
   if (expected != count) {
     sys.error(s"Expected application.conf to be $expected times on classpath, but it was there $count times")

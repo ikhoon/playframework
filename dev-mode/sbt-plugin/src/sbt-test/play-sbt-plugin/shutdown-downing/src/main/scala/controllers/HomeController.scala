@@ -4,20 +4,21 @@
 
 package controllers
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
 import javax.inject.Inject
-import play.api.mvc.AbstractController
-import play.api.mvc.Action
-import play.api.mvc.AnyContent
-import play.api.mvc.ControllerComponents
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.Await
 import scala.concurrent.Future
 
-class HomeController @Inject()(c: ControllerComponents, actorSystem: ActorSystem, cs: CoordinatedShutdown)
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.Done
+import play.api.mvc.AbstractController
+import play.api.mvc.Action
+import play.api.mvc.AnyContent
+import play.api.mvc.ControllerComponents
+
+class HomeController @Inject() (c: ControllerComponents, actorSystem: ActorSystem, cs: CoordinatedShutdown)
     extends AbstractController(c) {
 
   // This timestamp is useful in logs to see if a new instance of the Controller is created.
@@ -32,7 +33,7 @@ class HomeController @Inject()(c: ControllerComponents, actorSystem: ActorSystem
     Future.successful(Done)
   }
 
-  def index: Action[AnyContent] = Action {
+  def index(): Action[AnyContent] = Action {
     Ok("original")
   }
 

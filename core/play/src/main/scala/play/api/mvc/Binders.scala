@@ -4,19 +4,18 @@
 
 package play.api.mvc
 
-import controllers.Assets.Asset
-
 import java.net.URLEncoder
 import java.util.Optional
 import java.util.OptionalDouble
 import java.util.OptionalInt
 import java.util.OptionalLong
 import java.util.UUID
-import scala.annotation._
 
+import scala.annotation._
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
+import controllers.Assets.Asset
 import reflect.ClassTag
 
 /**
@@ -185,6 +184,7 @@ trait PathBindable[A] {
   def transform[B](toB: A => B, toA: B => A) = new PathBindable[B] {
     def bind(key: String, value: String): Either[String, B] = self.bind(key, value).map(toB)
     def unbind(key: String, value: B): String               = self.unbind(key, toA(value))
+    override def javascriptUnbind: String                   = self.javascriptUnbind
   }
 }
 
@@ -296,9 +296,7 @@ object JavascriptLiteral {
 /**
  * Default binders for Query String
  */
-object QueryStringBindable {
-  import play.api.mvc.macros.BinderMacros
-  import scala.language.experimental.macros
+object QueryStringBindable extends QueryStringBindableMacros {
 
   /**
    * URL-encoding for all bindable string-parts.
@@ -334,7 +332,7 @@ object QueryStringBindable {
    * QueryString binder for String.
    */
   implicit def bindableString: QueryStringBindable[String] = new QueryStringBindable[String] {
-    def bind(key: String, params: Map[String, Seq[String]]) =
+    def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, String]] =
       params.get(key).flatMap(_.headOption).map(Right(_))
     // No need to URL decode from query string since netty already does that
 
@@ -463,7 +461,7 @@ object QueryStringBindable {
    */
   implicit def bindableOption[T: QueryStringBindable]: QueryStringBindable[Option[T]] =
     new QueryStringBindable[Option[T]] {
-      def bind(key: String, params: Map[String, Seq[String]]) = {
+      def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Option[T]]] = {
         Some(
           implicitly[QueryStringBindable[T]]
             .bind(key, params)
@@ -481,7 +479,7 @@ object QueryStringBindable {
    */
   implicit def bindableJavaOption[T: QueryStringBindable]: QueryStringBindable[Optional[T]] =
     new QueryStringBindable[Optional[T]] {
-      def bind(key: String, params: Map[String, Seq[String]]) = {
+      def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Optional[T]]] = {
         Some(
           implicitly[QueryStringBindable[T]]
             .bind(key, params)
@@ -499,7 +497,7 @@ object QueryStringBindable {
    * QueryString binder for Java OptionalInt.
    */
   implicit def bindableJavaOptionalInt: QueryStringBindable[OptionalInt] = new QueryStringBindable[OptionalInt] {
-    def bind(key: String, params: Map[String, Seq[String]]) = {
+    def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, OptionalInt]] = {
       Some(
         bindableInt
           .bind(key, params)
@@ -515,7 +513,7 @@ object QueryStringBindable {
    * QueryString binder for Java OptionalLong.
    */
   implicit def bindableJavaOptionalLong: QueryStringBindable[OptionalLong] = new QueryStringBindable[OptionalLong] {
-    def bind(key: String, params: Map[String, Seq[String]]) = {
+    def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, OptionalLong]] = {
       Some(
         bindableLong
           .bind(key, params)
@@ -532,7 +530,7 @@ object QueryStringBindable {
    */
   implicit def bindableJavaOptionalDouble: QueryStringBindable[OptionalDouble] =
     new QueryStringBindable[OptionalDouble] {
-      def bind(key: String, params: Map[String, Seq[String]]) = {
+      def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, OptionalDouble]] = {
         Some(
           bindableDouble
             .bind(key, params)
@@ -645,17 +643,12 @@ object QueryStringBindable {
         Option(ct.runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[T].javascriptUnbind())
           .getOrElse(super.javascriptUnbind)
     }
-
-  implicit def anyValQueryStringBindable[T <: AnyVal]: QueryStringBindable[T] =
-    macro BinderMacros.anyValQueryStringBindable[T]
 }
 
 /**
  * Default binders for URL path part.
  */
-object PathBindable {
-  import play.api.mvc.macros.BinderMacros
-  import scala.language.experimental.macros
+object PathBindable extends PathBindableMacros {
 
   /**
    * A helper class for creating PathBindables to map the value of a path pattern/segment
@@ -767,15 +760,10 @@ object PathBindable {
           case "false" | "0" => false
         },
         _.toString,
-        (key: String, e: Exception) => "Cannot parse parameter %s as Boolean: should be true, false, 0 or 1".format(key)
+        (s, _) => s"Cannot parse parameter $s as Boolean: should be true, false, 0 or 1"
       ) {
     override def javascriptUnbind = """function(k,v){return !!v}"""
   }
-
-  /**
-   * Path binder for AnyVal
-   */
-  implicit def anyValPathBindable[T <: AnyVal]: PathBindable[T] = macro BinderMacros.anyValPathBindable[T]
 
   /**
    * Path binder for Java Boolean.
@@ -811,7 +799,7 @@ object PathBindable {
   /**
    * This is used by the Java RouterBuilder DSL.
    */
-  private[play] lazy val pathBindableRegister: Map[Class[_], PathBindable[_]] = {
+  private[play] lazy val pathBindableRegister: Map[Class[?], PathBindable[?]] = {
     import scala.language.existentials
     def register[T](implicit pb: PathBindable[T], ct: ClassTag[T]) = ct.runtimeClass -> pb
     Map(

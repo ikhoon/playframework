@@ -5,16 +5,16 @@
 package play.core.routing
 
 import java.util.Optional
+import java.util.OptionalDouble
 import java.util.OptionalInt
 import java.util.OptionalLong
-import java.util.OptionalDouble
+
+import scala.jdk.CollectionConverters._
 
 import play.api.http.HttpErrorHandler
 import play.api.mvc._
 import play.api.routing.HandlerDef
 import play.api.routing.Router
-
-import scala.jdk.CollectionConverters._
 
 /**
  * A route
@@ -32,13 +32,12 @@ object Route {
    * Create a params extractor from the given method and path pattern.
    */
   def apply(method: String, pathPattern: PathPattern) = new ParamsExtractor {
-    def unapply(request: RequestHeader): Option[RouteParams] = {
+    def unapply(request: RequestHeader): Option[RouteParams] =
       if (method == request.method) {
         pathPattern(request.path).map { groups => RouteParams(groups, request.queryString) }
       } else {
         None
       }
-    }
   }
 }
 
@@ -46,9 +45,8 @@ object Route {
  * An included router
  */
 class Include(val router: Router) {
-  def unapply(request: RequestHeader): Option[Handler] = {
+  def unapply(request: RequestHeader): Option[Handler] =
     router.routes.lift(request)
-  }
 }
 
 /**
@@ -61,27 +59,31 @@ object Include {
 case class Param[T](name: String, value: Either[String, T])
 
 case class RouteParams(path: Map[String, Either[Throwable, String]], queryString: Map[String, Seq[String]]) {
-  def fromPath[T](key: String, default: Option[T] = None)(implicit binder: PathBindable[T]): Param[T] = {
+  def fromPath[T](key: String, default: Option[T] = None)(implicit binder: PathBindable[T]): Param[T] =
     Param(
       key,
       path.get(key).map(v => v.fold(t => Left(t.getMessage), binder.bind(key, _))).getOrElse {
         default.map(d => Right(d)).getOrElse(Left("Missing parameter: " + key))
       }
     )
-  }
 
   def fromQuery[T](key: String, default: Option[T] = None)(implicit binder: QueryStringBindable[T]): Param[T] = {
     val bindResult = binder.bind(key, queryString)
-    if (bindResult == Some(Right(None)) || bindResult == Some(Right(Optional.empty))
-        || bindResult == Some(Right(OptionalInt.empty)) || bindResult == Some(Right(OptionalLong.empty))
-        || bindResult == Some(Right(OptionalDouble.empty))
-        || bindResult == Some(Right(Nil)) || bindResult == Some(Right(Nil.asJava))
-        || bindResult == Some(Right(Some(Nil))) || bindResult == Some(Right(Optional.of(Nil.asJava)))) {
+    if (
+      bindResult == Some(Right(None)) || bindResult == Some(Right(Optional.empty))
+      || bindResult == Some(Right(OptionalInt.empty)) || bindResult == Some(Right(OptionalLong.empty))
+      || bindResult == Some(Right(OptionalDouble.empty))
+      || bindResult == Some(Right(Nil)) || bindResult == Some(Right(Nil.asJava))
+      || bindResult == Some(Right(Some(Nil))) || bindResult == Some(Right(Optional.of(Nil.asJava)))
+    ) {
       Param(key, default.map(d => Right(d)).getOrElse(bindResult.get))
     } else {
-      Param(key, bindResult.getOrElse {
-        default.map(d => Right(d)).getOrElse(Left("Missing parameter: " + key))
-      })
+      Param(
+        key,
+        bindResult.getOrElse {
+          default.map(d => Right(d)).getOrElse(Left("Missing parameter: " + key))
+        }
+      )
     }
   }
 }
@@ -96,15 +98,13 @@ abstract class GeneratedRouter extends Router {
     errorHandler.onClientError(request, play.api.http.Status.BAD_REQUEST, error)
   }
 
-  def call(generator: => Handler): Handler = {
+  def call(generator: => Handler): Handler =
     generator
-  }
 
-  def call[P](pa: Param[P])(generator: (P) => Handler): Handler = {
+  def call[P](pa: Param[P])(generator: (P) => Handler): Handler =
     pa.value.fold(badRequest, generator)
-  }
 
-  //Keep the old versions for avoiding compiler failures while building for Scala 2.10,
+  // Keep the old versions for avoiding compiler failures while building for Scala 2.10,
   // and for avoiding warnings when building for newer Scala versions
   // format: off
   def call[A1, A2](pa1: Param[A1], pa2: Param[A2])(generator: Function2[A1, A2, Handler]): Handler = {
@@ -458,9 +458,9 @@ a1 <- pa1.value
   }
   // format: on
 
-  def call[T](params: List[Param[_]])(generator: (Seq[_]) => Handler): Handler =
+  def call[T](params: List[Param[?]])(generator: (Seq[?]) => Handler): Handler =
     params
-      .foldLeft[Either[String, Seq[_]]](Right(Seq[T]())) { (seq, param) => seq.flatMap(s => param.value.map(s :+ _)) }
+      .foldLeft[Either[String, Seq[?]]](Right(Seq[T]())) { (seq, param) => seq.flatMap(s => param.value.map(s :+ _)) }
       .fold(badRequest, generator)
   def fakeValue[A]: A = throw new UnsupportedOperationException("Can't get a fake value")
 

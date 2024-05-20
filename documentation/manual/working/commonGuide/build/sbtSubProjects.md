@@ -102,7 +102,7 @@ object Common {
   val playSettings = settings ++ Seq(
     routesGenerator := InjectedRoutesGenerator,
     libraryDependencies += specs2 % Test,
-    resolvers += Resolver.sonatypeRepo("snapshots") // contains akka(-http) snapshots
+    resolvers += Resolver.ApacheMavenSnapshotsRepo // contains pekko(-http) snapshots
   )
 }
 ```
@@ -142,7 +142,7 @@ lazy val main = (project in file("."))
 name := "myadmin"
 
 libraryDependencies ++= Seq(
-  "mysql" % "mysql-connector-java" % "5.1.41",
+  "com.mysql" % "mysql-connector-j" % "8.0.33",
   jdbc,
   anorm
 )

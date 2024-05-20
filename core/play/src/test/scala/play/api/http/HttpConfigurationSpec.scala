@@ -8,11 +8,11 @@ import java.io.File
 
 import com.typesafe.config.ConfigFactory
 import org.specs2.mutable.Specification
+import play.api.mvc.Cookie.SameSite
 import play.api.Configuration
 import play.api.Environment
 import play.api.Mode
 import play.api.PlayException
-import play.api.mvc.Cookie.SameSite
 import play.core.cookie.encoding.ClientCookieDecoder
 import play.core.cookie.encoding.ClientCookieEncoder
 import play.core.cookie.encoding.ServerCookieDecoder
@@ -30,6 +30,7 @@ class HttpConfigurationSpec extends Specification {
         "play.http.parser.allowEmptyFiles"                            -> "true",
         "play.http.actionComposition.controllerAnnotationsFirst"      -> "true",
         "play.http.actionComposition.executeActionCreatorActionFirst" -> "true",
+        "play.http.actionComposition.includeWebSocketActions"         -> "true",
         "play.http.cookies.strict"                                    -> "true",
         "play.http.session.cookieName"                                -> "PLAY_SESSION",
         "play.http.session.secure"                                    -> "true",
@@ -192,6 +193,11 @@ class HttpConfigurationSpec extends Specification {
       "execute request handler action first" in {
         val httpConfiguration = new HttpConfiguration.HttpConfigurationProvider(configuration, environment).get
         httpConfiguration.actionComposition.executeActionCreatorActionFirst must beTrue
+      }
+
+      "include WebSocket actions" in {
+        val httpConfiguration = new HttpConfiguration.HttpConfigurationProvider(configuration, environment).get
+        httpConfiguration.actionComposition.includeWebSocketActions must beTrue
       }
     }
 

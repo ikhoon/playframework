@@ -4,13 +4,13 @@
 
 package play.api.http
 
-import play.api.Logger
-import play.api.mvc.RequestHeader
-
 import scala.collection.BitSet
-import scala.util.Try
 import scala.util.parsing.combinator.Parsers
 import scala.util.parsing.input.CharSequenceReader
+import scala.util.Try
+
+import play.api.mvc.RequestHeader
+import play.api.Logger
 
 object ContentEncoding {
   // Taken from https://www.iana.org/assignments/http-parameters/http-parameters.xhtml
@@ -192,7 +192,7 @@ object AcceptEncoding {
      *
      * These patterns are translated directly using the same naming
      */
-    val ctl  = acceptIf { c => (c >= 0 && c <= 0x1F) || c == 0x7F }(_ => "Expected a control character")
+    val ctl  = acceptIf { c => (c >= 0 && c <= 0x1f) || c == 0x7f }(_ => "Expected a control character")
     val char = acceptIf(_ < 0x80)(_ => "Expected an ascii character")
     val text = not(ctl) ~> any
     val separators = {
@@ -222,12 +222,15 @@ object AcceptEncoding {
     val qValue = opt(';' ~> rep(' ') ~> tolerantQParameter <~ rep(' ')) ^^ (_.flatten)
     val encoding: Parser[EncodingPreference] = (token <~ rep(' ')) ~ qValue ^^ {
       case encoding ~ qValue =>
-        EncodingPreference(encoding, qValue.flatMap { q =>
-          Try(BigDecimal(q)).filter(q => q >= 0 && q <= 1).map(Some.apply).getOrElse {
-            logger.debug(s"Invalid q value: $q")
-            None
+        EncodingPreference(
+          encoding,
+          qValue.flatMap { q =>
+            Try(BigDecimal(q)).filter(q => q >= 0 && q <= 1).map(Some.apply).getOrElse {
+              logger.debug(s"Invalid q value: $q")
+              None
+            }
           }
-        })
+        )
     }
 
     val tolerantEncoding = tolerant(encoding <~ guard(end | ','), badEncoding)

@@ -3,17 +3,10 @@
  */
 
 import static javaguide.testhelpers.MockJavaActionHelper.*;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static play.test.Helpers.contentAsString;
 import static play.test.Helpers.fakeRequest;
 
-import akka.stream.IOResult;
-import akka.stream.Materializer;
-import akka.stream.javadsl.FileIO;
-import akka.stream.javadsl.Sink;
-import akka.stream.javadsl.Source;
-import akka.util.ByteString;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,6 +15,12 @@ import java.util.Collections;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import javax.inject.Inject;
+import org.apache.pekko.stream.IOResult;
+import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.stream.javadsl.FileIO;
+import org.apache.pekko.stream.javadsl.Sink;
+import org.apache.pekko.stream.javadsl.Source;
+import org.apache.pekko.util.ByteString;
 import org.junit.Test;
 import play.core.j.JavaHandlerComponents;
 import play.core.parsers.Multipart;
@@ -111,22 +110,24 @@ public class JavaFileUpload extends WithApplication {
         new Http.MultipartFormData.FilePart<>(
             "name", "filename", "text/plain", source, Files.size(tmpFile));
     assertThat(
-        contentAsString(
-            call(
-                new javaguide.testhelpers.MockJavaAction(instanceOf(JavaHandlerComponents.class)) {
-                  @BodyParser.Of(MultipartFormDataWithFileBodyParser.class)
-                  public Result uploadCustomMultiPart(Http.Request request) throws Exception {
-                    final Http.MultipartFormData<File> formData =
-                        request.body().asMultipartFormData();
-                    final Http.MultipartFormData.FilePart<File> filePart = formData.getFile("name");
-                    final File file = filePart.getRef();
-                    final long size = filePart.getFileSize();
-                    Files.deleteIfExists(file.toPath());
-                    return ok("Got: file size = " + size + "");
-                  }
-                },
-                fakeRequest("POST", "/").bodyRaw(Collections.singletonList(dp), tfc, mat),
-                mat)),
-        equalTo("Got: file size = 3"));
+            contentAsString(
+                call(
+                    new javaguide.testhelpers.MockJavaAction(
+                        instanceOf(JavaHandlerComponents.class)) {
+                      @BodyParser.Of(MultipartFormDataWithFileBodyParser.class)
+                      public Result uploadCustomMultiPart(Http.Request request) throws Exception {
+                        final Http.MultipartFormData<File> formData =
+                            request.body().asMultipartFormData();
+                        final Http.MultipartFormData.FilePart<File> filePart =
+                            formData.getFile("name");
+                        final File file = filePart.getRef();
+                        final long size = filePart.getFileSize();
+                        Files.deleteIfExists(file.toPath());
+                        return ok("Got: file size = " + size + "");
+                      }
+                    },
+                    fakeRequest("POST", "/").bodyRaw(Collections.singletonList(dp), tfc, mat),
+                    mat)))
+        .isEqualTo("Got: file size = 3");
   }
 }

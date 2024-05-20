@@ -2,7 +2,7 @@
  * Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
-// this is copy/pasted from https://github.com/akka/akka/blob/5576c233d063b3ee4cfc05d8e73c614a3dea478d/project/CrossJava.scalas
+// this is copy/pasted from https://github.com/apache/pekko/blob/5576c233d063b3ee4cfc05d8e73c614a3dea478d/project/CrossJava.scala
 
 package playbuild
 
@@ -12,9 +12,9 @@ import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
 
 import sbt._
-import sbt.Keys._
 import sbt.librarymanagement.SemanticSelector
 import sbt.librarymanagement.VersionNumber
+import sbt.Keys._
 
 /*
  * Tools for discovering different Java versions,

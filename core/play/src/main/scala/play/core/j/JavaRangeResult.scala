@@ -4,26 +4,26 @@
 
 package play.core.j
 
-import java.io.InputStream
 import java.io.File
+import java.io.InputStream
 import java.nio.file.Path
 import java.util.Optional
 
-import akka.annotation.ApiMayChange
+import scala.jdk.OptionConverters._
+
+import org.apache.pekko.annotation.ApiMayChange
+import org.apache.pekko.stream.javadsl.Source
+import org.apache.pekko.util.ByteString
+import play.api.mvc.RangeResult
 import play.mvc.RangeResults
 import play.mvc.Result
-
-import scala.jdk.OptionConverters._
-import akka.stream.javadsl.Source
-import akka.util.ByteString
-import play.api.mvc.RangeResult
 
 /**
  * Java compatible RangeResult
  */
 object JavaRangeResult {
   private type OptString   = Optional[String]
-  private type ScalaSource = akka.stream.scaladsl.Source[ByteString, _]
+  private type ScalaSource = org.apache.pekko.stream.scaladsl.Source[ByteString, ?]
 
   def ofStream(stream: InputStream, rangeHeader: OptString, fileName: String, contentType: OptString): Result = {
     RangeResult.ofStream(stream, rangeHeader.toScala, fileName, contentType.toScala).asJava
@@ -57,7 +57,7 @@ object JavaRangeResult {
 
   def ofSource(
       entityLength: Long,
-      source: Source[ByteString, _],
+      source: Source[ByteString, ?],
       rangeHeader: OptString,
       fileName: OptString,
       contentType: OptString
@@ -69,7 +69,7 @@ object JavaRangeResult {
 
   def ofSource(
       entityLength: Optional[Long],
-      source: Source[ByteString, _],
+      source: Source[ByteString, ?],
       rangeHeader: OptString,
       fileName: OptString,
       contentType: OptString

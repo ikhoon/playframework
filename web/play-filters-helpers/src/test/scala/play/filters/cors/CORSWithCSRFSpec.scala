@@ -9,7 +9,6 @@ import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
 
-import play.api.Application
 import play.api.http.ContentTypes
 import play.api.http.HttpFilters
 import play.api.http.SecretConfiguration
@@ -18,9 +17,11 @@ import play.api.inject.bind
 import play.api.libs.crypto.DefaultCSRFTokenSigner
 import play.api.libs.crypto.DefaultCookieSigner
 import play.api.mvc.DefaultActionBuilder
+import play.api.mvc.EssentialFilter
 import play.api.mvc.Results
-import play.api.routing.Router
 import play.api.routing.sird._
+import play.api.routing.Router
+import play.api.Application
 import play.filters.cors.CORSWithCSRFSpec.CORSWithCSRFRouter
 import play.filters.csrf._
 
@@ -30,7 +31,7 @@ object CORSWithCSRFSpec {
   }
 
   class FiltersWithoutCors @Inject() (csrfFilter: CSRFFilter) extends HttpFilters {
-    def filters = Seq(csrfFilter)
+    def filters: Seq[EssentialFilter] = Seq(csrfFilter)
   }
 
   class CORSWithCSRFRouter @Inject() (action: DefaultActionBuilder) extends Router {
@@ -50,15 +51,15 @@ object CORSWithCSRFSpec {
         val csrfCheck = CSRFCheck(play.filters.csrf.CSRFConfig(), signer, sessionConfiguration)
         csrfCheck(action(Results.Ok), CSRF.DefaultErrorHandler)
     }
-    override def withPrefix(prefix: String) = this
-    override def documentation              = Seq.empty
+    override def withPrefix(prefix: String): Router           = this
+    override def documentation: Seq[(String, String, String)] = Seq.empty
   }
 }
 
 class CORSWithCSRFSpec extends CORSCommonSpec {
   def withApp[T](
-      filters: Class[_ <: HttpFilters] = classOf[CORSWithCSRFSpec.Filters],
-      conf: Map[String, _ <: Any] = Map()
+      filters: Class[? <: HttpFilters] = classOf[CORSWithCSRFSpec.Filters],
+      conf: Map[String, ? <: Any] = Map()
   )(block: Application => T): T = {
     running(
       _.configure(conf).overrides(
@@ -68,7 +69,7 @@ class CORSWithCSRFSpec extends CORSCommonSpec {
     )(block)
   }
 
-  def withApplication[T](conf: Map[String, _] = Map.empty)(block: Application => T) =
+  def withApplication[T](conf: Map[String, ?] = Map.empty)(block: Application => T) =
     withApp(classOf[CORSWithCSRFSpec.Filters], conf)(block)
 
   private def corsRequest =

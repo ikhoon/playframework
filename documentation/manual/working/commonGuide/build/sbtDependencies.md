@@ -38,7 +38,7 @@ If you use `groupID %% artifactID % revision` rather than `groupID % artifactID 
 
 @[explicit-scala-version-dep](code/dependencies.sbt)
 
-Assuming the `scalaVersion` for your build is `2.13.10`, the following is identical (note the double `%%` after `"org.scala-tools"`):
+Assuming the `scalaVersion` for your build is `2.13.14`, the following is identical (note the double `%%` after `"org.scala-tools"`):
 
 @[auto-scala-version-dep](code/dependencies.sbt)
 
@@ -46,7 +46,7 @@ The idea is that many dependencies are compiled for multiple Scala versions, and
 
 ### Resolvers
 
-sbt uses the standard Maven2 repository and the Typesafe Releases (<https://repo.typesafe.com/typesafe/releases>) repositories by default. If your dependency isn't on one of the default repositories, you'll have to add a resolver to help Ivy find it.
+By default, sbt uses the Maven Central and, depending on the sbt version you are using, may use other repositories. You can find those repositories within sbt [here](https://github.com/sbt/sbt/blob/v1.9.6/launch/src/main/input_resources/sbt/sbt.boot.properties#L13-L19) (choose the tag corresponding to your sbt version).
 
 Use the `resolvers` setting key to add your own resolver. For example:
 
@@ -62,4 +62,4 @@ sbt has extensive documentation about how to manage conflict between your depend
 
 [sbt: Dependencies Conflict Management](https://www.scala-sbt.org/1.x/docs/Library-Management.html#Conflict+Management)
 
-You can also use [sbt-dependency-graph](https://github.com/jrudolph/sbt-dependency-graph) to have a better visualization of your dependency tree. See also our page about [[debugging sbt|sbtDebugging]] common problems.
+You can also use [sbt-dependency-graph](https://github.com/sbt/sbt-dependency-graph) to have a better visualization of your dependency tree. See also our page about [[debugging sbt|sbtDebugging]] common problems.

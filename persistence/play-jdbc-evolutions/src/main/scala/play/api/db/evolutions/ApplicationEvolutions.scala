@@ -4,22 +4,21 @@
 
 package play.api.db.evolutions
 
-import java.sql.Statement
 import java.sql.Connection
 import java.sql.SQLException
+import java.sql.Statement
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
 import scala.util.control.Exception.ignoring
 
-import play.api.db.Database
-import play.api.db.DBApi
 import play.api._
+import play.api.db.evolutions.DatabaseUrlPatterns._
+import play.api.db.DBApi
+import play.api.db.Database
 import play.core.HandleWebCommandSupport
 import play.core.WebCommands
-
-import play.api.db.evolutions.DatabaseUrlPatterns._
 
 /**
  * Run evolutions on application startup. Automatically runs on construction.
@@ -281,7 +280,7 @@ private object ApplicationEvolutions {
     val (selectScript, createScript, insertScript) = url match {
       case OracleJdbcUrl() =>
         (SelectPlayEvolutionsLockOracleSql, CreatePlayEvolutionsLockOracleSql, InsertIntoPlayEvolutionsLockOracleSql)
-      case MysqlJdbcUrl(_) =>
+      case MysqlJdbcUrl(_, _) =>
         (SelectPlayEvolutionsLockMysqlSql, CreatePlayEvolutionsLockMysqlSql, InsertIntoPlayEvolutionsLockMysqlSql)
       case _ =>
         (SelectPlayEvolutionsLockSql, CreatePlayEvolutionsLockSql, InsertIntoPlayEvolutionsLockSql)
@@ -305,9 +304,9 @@ private object ApplicationEvolutions {
       attempts: Int = 5
   ): Unit = {
     val lockScripts = url match {
-      case MysqlJdbcUrl(_) => lockPlayEvolutionsLockMysqlSqls
-      case OracleJdbcUrl() => lockPlayEvolutionsLockOracleSqls
-      case _               => lockPlayEvolutionsLockSqls
+      case MysqlJdbcUrl(_, _) => lockPlayEvolutionsLockMysqlSqls
+      case OracleJdbcUrl()    => lockPlayEvolutionsLockOracleSqls
+      case _                  => lockPlayEvolutionsLockSqls
     }
     try {
       for (script <- lockScripts) s.execute(applyConfig(script, dbConfig))
@@ -348,6 +347,7 @@ trait EvolutionsDatasourceConfig {
   def substitutionsSuffix: String
   def substitutionsMappings: Map[String, String]
   def substitutionsEscape: Boolean
+  def path: String
 }
 
 /**
@@ -373,6 +373,7 @@ case class DefaultEvolutionsDatasourceConfig(
     substitutionsSuffix: String,
     substitutionsMappings: Map[String, String],
     substitutionsEscape: Boolean,
+    path: String,
 ) extends EvolutionsDatasourceConfig
 
 /**
@@ -438,6 +439,7 @@ class DefaultEvolutionsConfigParser @Inject() (rootConfig: Configuration) extend
     val autoApply          = config.get[Boolean]("autoApply")
     val autoApplyDowns     = config.get[Boolean]("autoApplyDowns")
     val skipApplyDownsOnly = config.get[Boolean]("skipApplyDownsOnly")
+    val path               = config.get[String]("path")
     val substPrefix        = config.get[String]("substitutions.prefix")
     val substSuffix        = config.get[String]("substitutions.suffix")
     val substMappings      = loadSubstitutionsMappings(config)
@@ -455,7 +457,8 @@ class DefaultEvolutionsConfigParser @Inject() (rootConfig: Configuration) extend
       substPrefix,
       substSuffix,
       substMappings,
-      escapeEnabled
+      escapeEnabled,
+      path
     )
 
     // Load config specific to datasources
@@ -490,6 +493,7 @@ class DefaultEvolutionsConfigParser @Inject() (rootConfig: Configuration) extend
             "skipApplyDownsOnly",
             s"skipApplyDownsOnly.$datasource"
           )
+          val path          = dsConfig.get[String]("path")
           val substPrefix   = dsConfig.get[String]("substitutions.prefix")
           val substSuffix   = dsConfig.get[String]("substitutions.suffix")
           val escapeEnabled = dsConfig.get[Boolean]("substitutions.escapeEnabled")
@@ -506,7 +510,8 @@ class DefaultEvolutionsConfigParser @Inject() (rootConfig: Configuration) extend
             substPrefix,
             substSuffix,
             substMappings,
-            escapeEnabled
+            escapeEnabled,
+            path
           )
       }
 
@@ -630,6 +635,6 @@ case class InvalidDatabaseRevision(db: String, script: String)
 
   def htmlDescription = {
     <span>An SQL script will be run on your database -</span>
-    <input name="evolution-button" type="button" value="Apply this script now!" onclick={javascript}/>
+    <input name="evolution-button" type="button" value="Click here to apply this script now!" onclick={javascript}/>
   }.mkString
 }

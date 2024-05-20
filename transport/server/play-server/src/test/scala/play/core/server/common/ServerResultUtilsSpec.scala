@@ -4,25 +4,25 @@
 
 package play.core.server.common
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.util.ByteString
-import org.specs2.mutable.Specification
-import play.api.http.Status._
-import play.api.http._
-import play.api.libs.crypto.CookieSignerProvider
-import play.api.libs.typedmap.TypedMap
-import play.api.mvc.Results._
-import play.api.mvc._
-import play.api.mvc.request.DefaultRequestFactory
-import play.api.mvc.request.RemoteConnection
-import play.api.mvc.request.RequestTarget
-
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.util.Success
 import scala.util.Try
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.specs2.mutable.Specification
+import play.api.http._
+import play.api.http.Status._
+import play.api.libs.crypto.CookieSignerProvider
+import play.api.libs.typedmap.TypedMap
+import play.api.mvc._
+import play.api.mvc.request.DefaultRequestFactory
+import play.api.mvc.request.RemoteConnection
+import play.api.mvc.request.RequestTarget
+import play.api.mvc.Results._
 
 class ServerResultUtilsSpec extends Specification {
   val jwtCodec = new JWTCookieDataCodec {
@@ -87,10 +87,10 @@ class ServerResultUtilsSpec extends Specification {
       cookieResult(Some("PLAY_FLASH" -> "\"a=b\"; Path=/"), Ok.withCookies(Cookie("cookie", "value"))) must beSome {
         (cookies: Seq[Cookie]) =>
           cookies.length must_== 2
-          cookies.find(_.name == "PLAY_FLASH") must beSome.like {
+          cookies.find(_.name == "PLAY_FLASH") must beSome[Cookie].like {
             case cookie => cookie.value must_== ""
           }
-          cookies.find(_.name == "cookie") must beSome.like {
+          cookies.find(_.name == "cookie") must beSome[Cookie].like {
             case cookie => cookie.value must_== "value"
           }
       }

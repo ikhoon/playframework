@@ -7,6 +7,9 @@ package play.api.mvc
 import java.time.Instant
 import java.time.ZoneId
 
+import scala.concurrent.duration._
+import scala.language.postfixOps
+
 import org.specs2.mutable._
 import play.api.http.JWTConfiguration
 import play.api.http.SecretConfiguration
@@ -14,8 +17,6 @@ import play.api.mvc.Cookie.SameSite
 import play.core.cookie.encoding.DefaultCookie
 import play.core.cookie.encoding.ServerCookieEncoder
 import play.core.test._
-
-import scala.concurrent.duration._
 
 class CookiesSpec extends Specification {
   sequential

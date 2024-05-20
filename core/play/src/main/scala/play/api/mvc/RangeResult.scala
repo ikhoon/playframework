@@ -6,18 +6,18 @@ package play.api.mvc
 
 import java.nio.file.Files
 
-import akka.NotUsed
-import akka.annotation.ApiMayChange
-import akka.stream.Attributes
-import akka.stream.FlowShape
-import akka.stream.Inlet
-import akka.stream.Outlet
-import akka.stream.scaladsl.FileIO
-import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Source
-import akka.stream.scaladsl.StreamConverters
-import akka.stream.stage._
-import akka.util.ByteString
+import org.apache.pekko.annotation.ApiMayChange
+import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.scaladsl.StreamConverters
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.stream.Attributes
+import org.apache.pekko.stream.FlowShape
+import org.apache.pekko.stream.Inlet
+import org.apache.pekko.stream.Outlet
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.NotUsed
 import play.api.http.ContentTypes
 import play.api.http.HeaderNames._
 import play.api.http.HttpEntity
@@ -87,7 +87,7 @@ private[mvc] trait Range extends Ordered[Range] {
 
 private[mvc] case class WithEntityLengthRange(entityLength: Long, start: Option[Long], end: Option[Long])
     extends Range {
-  override def getEntityLength = Some(entityLength)
+  override def getEntityLength: Option[Long] = Some(entityLength)
 
   // Rules according to RFC 7233:
   // 1. If the last-byte-pos value is absent, or if the value is greater
@@ -348,7 +348,7 @@ object RangeResult {
       fileName: String,
       contentType: Option[String]
   ): Result = {
-    // 8192 is the default chunkSize used by Akka Streams
+    // 8192 is the default chunkSize used by Pekko Streams
     val source = (start: Long) => (start, FileIO.fromPath(path, chunkSize = 8192, startPosition = start))
     ofSource(Some(Files.size(path)), source, rangeHeader, Option(fileName), contentType)
   }
@@ -378,7 +378,7 @@ object RangeResult {
 
   def ofSource(
       entityLength: Long,
-      source: Source[ByteString, _],
+      source: Source[ByteString, ?],
       rangeHeader: Option[String],
       fileName: Option[String],
       contentType: Option[String]
@@ -388,7 +388,7 @@ object RangeResult {
 
   def ofSource(
       entityLength: Option[Long],
-      source: Source[ByteString, _],
+      source: Source[ByteString, ?],
       rangeHeader: Option[String],
       fileName: Option[String],
       contentType: Option[String]
@@ -403,7 +403,7 @@ object RangeResult {
   @ApiMayChange
   def ofSource(
       entityLength: Option[Long],
-      getSource: Long => (Long, Source[ByteString, _]),
+      getSource: Long => (Long, Source[ByteString, ?]),
       rangeHeader: Option[String],
       fileName: Option[String],
       contentType: Option[String]
@@ -479,7 +479,7 @@ object RangeResult {
     }
   }
 
-  // See https://github.com/akka/akka-http/blob/main/akka-http-core/src/main/scala/akka/http/impl/util/StreamUtils.scala#L76
+  // See https://github.com/apache/pekko-http/blob/v1.0.0/http-core/src/main/scala/org/apache/pekko/http/impl/util/StreamUtils.scala#L121
   private def sliceBytesTransformer(start: Long, length: Option[Long]): Flow[ByteString, ByteString, NotUsed] = {
     val transformer: GraphStage[FlowShape[ByteString, ByteString]] = new GraphStage[FlowShape[ByteString, ByteString]] {
       val in: Inlet[ByteString]   = Inlet("Slicer.in")

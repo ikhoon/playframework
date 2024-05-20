@@ -6,11 +6,11 @@ package play.core.server.netty
 
 import org.reactivestreams.Processor
 import org.reactivestreams.Publisher
-import org.reactivestreams.Subscription
 import org.reactivestreams.Subscriber
+import org.reactivestreams.Subscription
 
 object SynchronousMappedStreams {
-  private class SynchronousContramappedSubscriber[A, B](subscriber: Subscriber[_ >: B], f: A => B)
+  private class SynchronousContramappedSubscriber[A, B](subscriber: Subscriber[? >: B], f: A => B)
       extends Subscriber[A] {
     override def onError(t: Throwable): Unit        = subscriber.onError(t)
     override def onSubscribe(s: Subscription): Unit = subscriber.onSubscribe(s)
@@ -20,7 +20,7 @@ object SynchronousMappedStreams {
   }
 
   private class SynchronousMappedPublisher[A, B](publisher: Publisher[A], f: A => B) extends Publisher[B] {
-    override def subscribe(s: Subscriber[_ >: B]): Unit =
+    override def subscribe(s: Subscriber[? >: B]): Unit =
       publisher.subscribe(new SynchronousContramappedSubscriber[A, B](s, f))
     override def toString = s"SynchronousMappedPublisher($publisher)"
   }
@@ -30,7 +30,7 @@ object SynchronousMappedStreams {
     override def onSubscribe(s: Subscription): Unit     = subscriber.onSubscribe(s)
     override def onComplete(): Unit                     = subscriber.onComplete()
     override def onNext(t: A): Unit                     = subscriber.onNext(t)
-    override def subscribe(s: Subscriber[_ >: B]): Unit = publisher.subscribe(s)
+    override def subscribe(s: Subscriber[? >: B]): Unit = publisher.subscribe(s)
     override def toString                               = s"JoinedProcessor($subscriber, $publisher)"
   }
 
@@ -39,7 +39,7 @@ object SynchronousMappedStreams {
    *
    * This is useful in situations where you want to guarantee that messages produced by the publisher are always
    * handled, but can't guarantee that the subscriber passed to it will always handle them. For example, a
-   * publisher that produces Netty `ByteBuf` can't be fed directly into an Akka streams subscriber since Akka streams
+   * publisher that produces Netty `ByteBuf` can't be fed directly into an Pekko streams subscriber since Pekko streams
    * may drop the message without giving any opportunity to release the `ByteBuf`, this can be used to consume the
    * `ByteBuf` and then release it.
    */
@@ -51,7 +51,7 @@ object SynchronousMappedStreams {
    *
    * This is useful in situations where you want to guarantee that messages that you produce always reach passed to the subscriber are always
    * handled, but can't guarantee that the subscriber being contramapped will always handle them. For example, a
-   * subscriber that consumes Netty `ByteBuf` can't subscribe directly to an Akka streams publisher since Akka streams
+   * subscriber that consumes Netty `ByteBuf` can't subscribe directly to an Pekko streams publisher since Pekko streams
    * may drop the messages its publishing without giving any opportunity to release the `ByteBuf`, this can be used to
    * to convert some other immutable message to a `ByteBuf` for consumption by the Netty subscriber.
    */

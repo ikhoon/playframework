@@ -9,8 +9,11 @@ import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-import akka.stream.Materializer
+import scala.concurrent.Future
+import scala.jdk.FutureConverters._
+
 import com.typesafe.config.ConfigMemorySize
+import org.apache.pekko.stream.Materializer
 import play.api._
 import play.api.http.HttpConfiguration
 import play.api.http.HttpErrorHandler
@@ -19,18 +22,15 @@ import play.api.inject.Module
 import play.api.libs.crypto.CSRFTokenSigner
 import play.api.libs.crypto.CSRFTokenSignerProvider
 import play.api.libs.typedmap.TypedKey
+import play.api.mvc._
 import play.api.mvc.Cookie.SameSite
 import play.api.mvc.Results._
-import play.api.mvc._
-import play.core.Execution
 import play.core.j.JavaContextComponents
-import play.filters.csrf.CSRF.CSRFHttpErrorHandler
+import play.core.Execution
 import play.filters.csrf.CSRF._
+import play.filters.csrf.CSRF.CSRFHttpErrorHandler
 import play.mvc.Http
 import play.utils.Reflect
-
-import scala.jdk.FutureConverters._
-import scala.concurrent.Future
 
 /**
  * CSRF configuration.
@@ -68,10 +68,10 @@ case class CSRFConfig(
 
   import java.{ util => ju }
 
-  import play.mvc.Http.{ RequestHeader => JRequestHeader }
-
   import scala.jdk.FunctionConverters._
   import scala.jdk.OptionConverters._
+
+  import play.mvc.Http.{ RequestHeader => JRequestHeader }
 
   def withTokenName(tokenName: String)                = copy(tokenName = tokenName)
   def withHeaderName(headerName: String)              = copy(headerName = headerName)
@@ -133,7 +133,7 @@ object CSRFConfig {
     @inline def checkRouteModifiers(rh: RequestHeader): Boolean = {
       import play.api.routing.Router.RequestImplicits._
       if (whitelistModifiers.isEmpty) {
-        blacklistModifiers.exists(rh.hasRouteModifier)
+        blacklistModifiers.isEmpty || blacklistModifiers.exists(rh.hasRouteModifier)
       } else {
         !whitelistModifiers.exists(rh.hasRouteModifier)
       }
@@ -303,7 +303,7 @@ object CSRF {
   }
 
   object ErrorHandler {
-    def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[_]] = {
+    def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[?]] = {
       Reflect.bindingsFromConfiguration[
         ErrorHandler,
         CSRFErrorHandler,
@@ -319,7 +319,7 @@ object CSRF {
  * The CSRF module.
  */
 class CSRFModule extends Module {
-  def bindings(environment: Environment, configuration: Configuration) =
+  def bindings(environment: Environment, configuration: Configuration): scala.collection.Seq[Binding[?]] =
     Seq(
       bind[play.libs.crypto.CSRFTokenSigner].to(classOf[play.libs.crypto.DefaultCSRFTokenSigner]),
       bind[CSRFTokenSigner].toProvider[CSRFTokenSignerProvider],

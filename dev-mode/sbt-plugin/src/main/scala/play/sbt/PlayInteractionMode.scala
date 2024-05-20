@@ -10,9 +10,11 @@ import java.io.FileInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.OutputStream
-import jline.console.ConsoleReader
+
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+
+import jline.console.ConsoleReader
 
 trait PlayInteractionMode {
 
@@ -45,8 +47,10 @@ trait PlayNonBlockingInteractionMode extends PlayInteractionMode {
    * Start the server, if not already started
    *
    * @param server A callback to start the server, that returns a closeable to stop it
+   *
+   * @return A boolean indicating if the server was started (true) or not (false).
    */
-  def start(server: => Closeable): Unit
+  def start(server: => Closeable): Boolean
 
   /**
    * Stop the server started by the last start request, if such a server exists
@@ -161,13 +165,18 @@ object StaticPlayNonBlockingInteractionMode extends PlayNonBlockingInteractionMo
    * Start the server, if not already started
    *
    * @param server A callback to start the server, that returns a closeable to stop it
+   *
+   * @return A boolean indicating if the server was started (true) or not (false).
    */
-  def start(server: => Closeable) = synchronized {
+  def start(server: => Closeable): Boolean = synchronized {
     current match {
-      case Some(_) => println("Not starting server since one is already started")
+      case Some(_) =>
+        println("Not starting server since one is already started")
+        false
       case None =>
         println("Starting server")
         current = Some(server)
+        true
     }
   }
 

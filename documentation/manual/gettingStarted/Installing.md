@@ -4,11 +4,11 @@
 
 This page shows how to download, install and run a Play application.  There's a built in tutorial that shows you around, so running this Play application will show you how Play itself works!
 
-Play is a series of libraries available in [Maven Repository](https://mvnrepository.com/artifact/com.typesafe.play), so you can use any Java build tool to build a Play project. However, much of the development experience Play is known for (routes, templates compilation and auto-reloading) is provided by [sbt](https://www.scala-sbt.org/). In this guide we describe how to install Play with sbt.
+Play is a series of libraries available in [Maven Repository](https://mvnrepository.com/artifact/org.playframework), so you can use any Java build tool to build a Play project. However, much of the development experience Play is known for (routes, templates compilation and auto-reloading) is provided by [sbt](https://www.scala-sbt.org/). In this guide we describe how to install Play with sbt.
 
 ## Prerequisites
 
-Play requires Java 1.8.  To check that you have the latest JDK, please run:
+Play requires at least Java 17, however also supports Java 21. To check that you have the latest JDK, please run:
 
 ```bash
 java -version
@@ -17,9 +17,9 @@ java -version
 You should see something like:
 
 ```
-openjdk version "1.8.0_222"
-OpenJDK Runtime Environment (AdoptOpenJDK)(build 1.8.0_222-b10)
-OpenJDK 64-Bit Server VM (AdoptOpenJDK)(build 25.222-b10, mixed mode)
+openjdk version "17.0.8" 2023-07-18
+OpenJDK Runtime Environment Temurin-17.0.8+7 (build 17.0.8+7)
+OpenJDK 64-Bit Server VM Temurin-17.0.8+7 (build 17.0.8+7, mixed mode)
 ```
 
 If you don't have the JDK, you have to install it from [Adoptium](https://adoptium.net/).

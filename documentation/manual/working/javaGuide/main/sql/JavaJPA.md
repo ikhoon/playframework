@@ -27,10 +27,11 @@ Next you have to create a proper `persistence.xml` JPA configuration file. Put i
 Here is a sample configuration file to use with Hibernate:
 
 ```xml
-<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd"
-             version="2.1">
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
 
     <persistence-unit name="defaultPersistenceUnit" transaction-type="RESOURCE_LOCAL">
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
@@ -61,7 +62,7 @@ This is a requirement by the [JPA specification](https://download.oracle.com/otn
 
 ## Using `play.db.jpa.JPAApi`
 
-Play offers you a convenient API to work with [Entity Manager](https://docs.oracle.com/javaee/7/api/javax/persistence/EntityManager.html) and Transactions. This API is defined by [`play.db.jpa.JPAApi`](api/java/play/db/jpa/JPAApi.html), which can be injected at other objects like the code below:
+Play offers you a convenient API to work with [Entity Manager](https://jakarta.ee/specifications/persistence/3.1/apidocs/jakarta.persistence/jakarta/persistence/entitymanager) and Transactions. This API is defined by [`play.db.jpa.JPAApi`](api/java/play/db/jpa/JPAApi.html), which can be injected at other objects like the code below:
 
 @[jpa-repository-api-inject](code/JPARepository.java)
 
@@ -77,7 +78,7 @@ This may mean that your domain object (aggregate root, in DDD terms) has an inte
 
 You should always use a custom execution context when using JPA, to ensure that Play's rendering thread pool is completely focused on rendering pages and using cores to their full extent.  You can use Play's `CustomExecutionContext` class to configure a custom execution context dedicated to serving JDBC operations.  See [[JavaAsync]] and [[ThreadPools]] for more details.
 
-All the Play example templates on [Play's download page](https://playframework.com/download#examples) that use blocking APIs (i.e. Anorm, JPA) have been updated to use custom execution contexts where appropriate. For example, going to <https://github.com/playframework/play-samples/tree/2.8.x/play-java-jpa-example> shows that the [JPAPersonRepository](https://github.com/playframework/play-samples/blob/2.8.x/play-java-jpa-example/app/models/JPAPersonRepository.java) class takes a `DatabaseExecutionContext` that wraps all the database operations.
+All the Play example templates on [Play's download page](https://playframework.com/download#examples) that use blocking APIs (i.e. Anorm, JPA) have been updated to use custom execution contexts where appropriate. For example, going to <https://github.com/playframework/play-samples/tree/3.0.x/play-java-jpa-example> shows that the [JPAPersonRepository](https://github.com/playframework/play-samples/blob/3.0.x/play-java-jpa-example/app/models/JPAPersonRepository.java) class takes a `DatabaseExecutionContext` that wraps all the database operations.
 
 For thread pool sizing involving JDBC connection pools, you want a fixed thread pool size matching the connection pool, using a thread pool executor.  Following the advice in [HikariCP's pool sizing page]( https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing), you should configure your JDBC connection pool to double the number of physical cores, plus the number of disk spindles, i.e. if you have a four core CPU and one disk, you have a total of 9 JDBC connections in the pool:
 
@@ -100,11 +101,11 @@ The `JPAApi` provides you various `withTransaction(...)` methods to execute arbi
 
 ### Examples
 
-Using [`JPAApi.withTransaction(Function<EntityManager, T>)`](api/java/play/db/jpa/JPAApi.html#withTransaction-java.util.function.Function-):
+Using [`JPAApi.withTransaction(Function<EntityManager, T>)`](api/java/play/db/jpa/JPAApi.html#withTransaction\(java.util.function.Function\)):
 
 @[jpa-withTransaction-function](code/JPARepository.java)
 
-Using [`JPAApi.withTransaction(Consumer<EntityManager>)`](api/java/play/db/jpa/JPAApi.html#withTransaction-java.util.function.Consumer-) to run a batch update:
+Using [`JPAApi.withTransaction(Consumer<EntityManager>)`](api/java/play/db/jpa/JPAApi.html#withTransaction\(java.util.function.Consumer\)) to run a batch update:
 
 @[jpa-withTransaction-consumer](code/JPARepository.java)
 

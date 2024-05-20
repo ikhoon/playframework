@@ -6,14 +6,13 @@ package play.api.http
 
 import java.io.File
 
-import akka.util.ByteString
+import org.apache.pekko.util.ByteString
 import org.specs2.mutable.Specification
+import play.api.libs.Files.SingletonTemporaryFileCreator._
 import play.api.libs.Files.TemporaryFile
 import play.api.mvc.Codec
 import play.api.mvc.MultipartFormData
 import play.api.mvc.MultipartFormData.FilePart
-
-import play.api.libs.Files.SingletonTemporaryFileCreator._
 
 class WriteableSpec extends Specification {
   "Writeable" in {
@@ -51,6 +50,28 @@ class WriteableSpec extends Specification {
         transformed.utf8String must contain("file part value")
       }
 
+      "escape 'name' and 'filename' params" in {
+        val multipartFormData =
+          createMultipartFormData[String](
+            "file part value",
+            data => Some(ByteString.fromString(data)),
+            dataPartKey = "ab\"cd\nef\rgh\"ij\rk\nl",
+            filePartKey = "mn\"op\nqr\rst\"uv\rw\nx",
+            filePartFilename = "fo\"o\no\rb\"a\ra\nar.p\"df"
+          )
+        val codec = Codec.utf_8
+
+        val writeable               = Writeable.writeableOf_MultipartFormData[String](None)(codec)
+        val transformed: ByteString = writeable.transform(multipartFormData)
+
+        transformed.utf8String must contain("""Content-Disposition: form-data; name="ab%22cd%0Aef%0Dgh%22ij%0Dk%0Al"""")
+        transformed.utf8String must contain(
+          """Content-Disposition: form-data; name="mn%22op%0Aqr%0Dst%22uv%0Dw%0Ax"; filename="fo%22o%0Ao%0Db%22a%0Da%0Aar.p%22df""""
+        )
+        transformed.utf8String must contain("Content-Type: text/plain")
+        transformed.utf8String must contain("file part value")
+      }
+
       "use multipart/form-data content-type" in {
         val codec     = Codec.utf_8
         val writeable = Writeable.writeableOf_MultipartFormData(None)(codec)
@@ -70,15 +91,21 @@ class WriteableSpec extends Specification {
     }
   }
 
-  def createMultipartFormData[A](ref: A, refToBytes: A => Option[ByteString] = (a: A) => None): MultipartFormData[A] = {
+  def createMultipartFormData[A](
+      ref: A,
+      refToBytes: A => Option[ByteString] = (a: A) => None,
+      dataPartKey: String = "name",
+      filePartKey: String = "thefile",
+      filePartFilename: String = "something.text"
+  ): MultipartFormData[A] = {
     MultipartFormData[A](
       dataParts = Map(
-        "name" -> Seq("value")
+        dataPartKey -> Seq("value")
       ),
       files = Seq(
         FilePart[A](
-          key = "thefile",
-          filename = "something.text",
+          key = filePartKey,
+          filename = filePartFilename,
           contentType = Some("text/plain"),
           ref = ref,
           refToBytes = refToBytes

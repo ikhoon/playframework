@@ -4,9 +4,13 @@
 
 package play.filters.csp
 
-import akka.stream.Materializer
-import com.typesafe.config.ConfigFactory
 import javax.inject.Inject
+
+import scala.concurrent.ExecutionContext
+import scala.reflect.ClassTag
+
+import com.typesafe.config.ConfigFactory
+import org.apache.pekko.stream.Materializer
 import play.api.http.HttpFilters
 import play.api.http.NoHttpFilters
 import play.api.inject.bind
@@ -20,9 +24,6 @@ import play.api.test.PlaySpecification
 import play.api.Application
 import play.api.Configuration
 
-import scala.concurrent.ExecutionContext
-import scala.reflect.ClassTag
-
 object ScalaCSPActionSpec {
   class CSPResultRouter @Inject() (action: CSPActionBuilder) extends SimpleRouterImpl({ case _ => action(Ok("hello")) })
 
@@ -34,8 +35,7 @@ object ScalaCSPActionSpec {
       cspConfig: CSPConfig,
       assetCache: AssetCache
   )(
-      implicit
-      protected override val executionContext: ExecutionContext,
+      implicit protected override val executionContext: ExecutionContext,
       protected override val mat: Materializer
   ) extends CSPActionBuilder {
     override def parser: BodyParser[AnyContent] = bodyParsers.default

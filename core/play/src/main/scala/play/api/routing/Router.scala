@@ -5,11 +5,11 @@
 package play.api.routing
 
 import play.api.libs.typedmap.TypedKey
-import play.api.Configuration
-import play.api.Environment
 import play.api.mvc.Handler
 import play.api.mvc.RequestHeader
 import play.api.routing.Router.Routes
+import play.api.Configuration
+import play.api.Environment
 import play.core.j.JavaRouterAdapter
 import play.utils.Reflect
 
@@ -80,7 +80,7 @@ object Router {
    *
    * @return The router class if configured or if a default one in the root package was detected.
    */
-  def load(env: Environment, configuration: Configuration): Option[Class[_ <: Router]] = {
+  def load(env: Environment, configuration: Configuration): Option[Class[? <: Router]] = {
     val className = configuration.getDeprecated[Option[String]]("play.http.router", "application.router")
 
     try {
@@ -140,9 +140,9 @@ object Router {
    * Never returns an handler from the routes function.
    */
   val empty: Router = new Router {
-    def documentation              = Nil
-    def withPrefix(prefix: String) = this
-    def routes                     = PartialFunction.empty
+    def documentation: Seq[(String, String, String)] = Nil
+    def withPrefix(prefix: String): Router           = this
+    def routes: Routes                               = PartialFunction.empty
   }
 
   /**

@@ -4,20 +4,20 @@
 
 package play.filters.cors
 
-import akka.stream.Materializer
-import akka.util.ByteString
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
 import play.api.http.DefaultHttpErrorHandler
 import play.api.http.HttpErrorHandler
 import play.api.http.ParserConfiguration
+import play.api.libs.streams.Accumulator
 import play.api.libs.Files.SingletonTemporaryFileCreator
 import play.api.libs.Files.TemporaryFileCreator
-import play.api.libs.streams.Accumulator
 import play.api.mvc._
 import play.api.Configuration
 import play.api.Logger
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 
 /**
  * A play.api.mvc.ActionBuilder that implements Cross-Origin Resource Sharing (CORS)
@@ -86,7 +86,8 @@ object CORSActionBuilder {
   )(implicit materializer: Materializer, ec: ExecutionContext): CORSActionBuilder = {
     val eh = errorHandler
     new CORSActionBuilder {
-      override lazy val parser                                  = new BodyParsers.Default(tempFileCreator, eh, parserConfig)(materializer)
+      override lazy val parser: BodyParser[AnyContent] =
+        new BodyParsers.Default(tempFileCreator, eh, parserConfig)(materializer)
       protected override def mat: Materializer                  = materializer
       protected override def executionContext: ExecutionContext = ec
       protected override def corsConfig: CORSConfig = {
@@ -112,7 +113,8 @@ object CORSActionBuilder {
   )(implicit materializer: Materializer, ec: ExecutionContext): CORSActionBuilder = {
     val eh = errorHandler
     new CORSActionBuilder {
-      override lazy val parser                                  = new BodyParsers.Default(tempFileCreator, eh, parserConfig)(materializer)
+      override lazy val parser: BodyParser[AnyContent] =
+        new BodyParsers.Default(tempFileCreator, eh, parserConfig)(materializer)
       protected override def mat: Materializer                  = materializer
       protected override val executionContext: ExecutionContext = ec
       protected override val corsConfig: CORSConfig             = config

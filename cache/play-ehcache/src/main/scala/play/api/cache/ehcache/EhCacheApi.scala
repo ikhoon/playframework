@@ -8,29 +8,29 @@ import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import com.google.common.primitives.Primitives
-import net.sf.ehcache.CacheManager
-import net.sf.ehcache.Ehcache
-import net.sf.ehcache.Element
-import net.sf.ehcache.ObjectExistsException
-import play.api.cache._
-import play.api.inject._
-import play.api.Configuration
-import play.api.Environment
-import play.cache.NamedCacheImpl
-import play.cache.SyncCacheApiAdapter
-import play.cache.{ AsyncCacheApi => JavaAsyncCacheApi }
-import play.cache.{ DefaultAsyncCacheApi => JavaDefaultAsyncCacheApi }
-import play.cache.{ SyncCacheApi => JavaSyncCacheApi }
-
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
+import com.google.common.primitives.Primitives
+import net.sf.ehcache.CacheManager
+import net.sf.ehcache.Ehcache
+import net.sf.ehcache.Element
+import net.sf.ehcache.ObjectExistsException
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.Done
+import play.api.cache._
+import play.api.inject._
+import play.api.Configuration
+import play.api.Environment
+import play.cache.{ AsyncCacheApi => JavaAsyncCacheApi }
+import play.cache.{ DefaultAsyncCacheApi => JavaDefaultAsyncCacheApi }
+import play.cache.{ SyncCacheApi => JavaSyncCacheApi }
+import play.cache.NamedCacheImpl
+import play.cache.SyncCacheApiAdapter
 
 /**
  * EhCache components for compile time injection
@@ -75,7 +75,7 @@ class EhCacheModule
       }
 
       // bind wrapper classes
-      def wrapperBindings(cacheApiKey: BindingKey[AsyncCacheApi], namedCache: NamedCache): Seq[Binding[_]] = Seq(
+      def wrapperBindings(cacheApiKey: BindingKey[AsyncCacheApi], namedCache: NamedCache): Seq[Binding[?]] = Seq(
         bind[JavaAsyncCacheApi].qualifiedWith(namedCache).to(new NamedJavaAsyncCacheApiProvider(cacheApiKey)),
         bind[Cached].qualifiedWith(namedCache).to(new NamedCachedProvider(cacheApiKey)),
         bind[SyncCacheApi].qualifiedWith(namedCache).to(new NamedSyncCacheApiProvider(cacheApiKey)),
@@ -221,7 +221,7 @@ class SyncEhCacheApi @Inject() (private[ehcache] val cache: Ehcache) extends Syn
       .map(_.getObjectValue)
       .filter { v =>
         Primitives.wrap(ct.runtimeClass).isInstance(v) ||
-        ct == ClassTag.Nothing || (ct == ClassTag.Unit && v == ((): Unit))
+        ct == ClassTag.Nothing || (ct == ClassTag.Unit && v == ((): Unit).asInstanceOf[Any])
       }
       .asInstanceOf[Option[T]]
   }

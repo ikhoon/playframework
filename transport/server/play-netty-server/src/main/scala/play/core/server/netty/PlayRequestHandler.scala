@@ -7,30 +7,32 @@ package play.core.server.netty
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 
-import akka.stream.Materializer
-import com.typesafe.netty.http.DefaultWebSocketHttpResponse
-import io.netty.channel._
-import io.netty.handler.codec.TooLongFrameException
-import io.netty.handler.codec.http._
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory
-import play.api.http._
-import play.api.libs.streams.Accumulator
-import play.api.mvc._
-import play.api.Application
-import play.api.Logger
-import play.api.Mode
-import play.core.server.NettyServer
-import play.core.server.Server
-import play.core.server.common.ReloadCache
-import play.core.server.common.ServerDebugInfo
-import play.core.server.common.ServerResultUtils
-
-import scala.concurrent.Future
 import scala.concurrent.duration.Duration
+import scala.concurrent.Future
+import scala.util.control.Exception.catching
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import scala.util.control.Exception.catching
+
+import io.netty.channel._
+import io.netty.handler.codec.http._
+import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory
+import io.netty.handler.codec.TooLongFrameException
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.playframework.netty.http.DefaultWebSocketHttpResponse
+import play.api.http._
+import play.api.libs.streams.Accumulator
+import play.api.mvc._
+import play.api.mvc.request.RequestAttrKey
+import play.api.Application
+import play.api.Logger
+import play.api.Mode
+import play.core.server.common.ReloadCache
+import play.core.server.common.ServerDebugInfo
+import play.core.server.common.ServerResultUtils
+import play.core.server.NettyServer
+import play.core.server.Server
 
 private object PlayRequestHandler {
   private val logger: Logger = Logger(classOf[PlayRequestHandler])
@@ -43,6 +45,7 @@ private[play] class PlayRequestHandler(
     val wsBufferLimit: Int,
     val wsKeepAliveMode: String,
     val wsKeepAliveMaxIdle: Duration,
+    val deferBodyParsingGlobal: Boolean
 ) extends ChannelInboundHandlerAdapter {
   import PlayRequestHandler._
 
@@ -103,27 +106,35 @@ private[play] class PlayRequestHandler(
       ServerDebugInfo.attachToRequestHeader(rh, cacheValues.serverDebugInfo)
     }
 
-    def clientError(statusCode: Int, message: String): (RequestHeader, Handler) = {
-      val unparsedTarget = modelConversion(tryApp).createUnparsedRequestTarget(request)
+    def clientError(statusCode: Int, message: String, bypassErrorHandler: Boolean = false): (RequestHeader, Handler) = {
+      val unparsedTarget = Server.createUnparsedRequestTarget(request.uri)
       val requestHeader  = modelConversion(tryApp).createRequestHeader(channel, request, unparsedTarget)
       val debugHeader    = attachDebugInfo(requestHeader)
-      val result = errorHandler(tryApp).onClientError(
-        debugHeader.addAttr(HttpErrorHandler.Attrs.HttpErrorInfo, HttpErrorInfo("server-backend")),
-        statusCode,
-        if (message == null) "" else message
-      )
+      val cleanMessage   = if (message == null) "" else message
+      val result =
+        if (bypassErrorHandler) Future.successful(Results.Status(statusCode)(cleanMessage))
+        else
+          errorHandler(tryApp).onClientError(
+            debugHeader.addAttr(HttpErrorHandler.Attrs.HttpErrorInfo, HttpErrorInfo("server-backend")),
+            statusCode,
+            cleanMessage
+          )
       // If there's a problem in parsing the request, then we should close the connection, once done with it
       debugHeader -> Server.actionForResult(result.map(_.withHeaders(HeaderNames.CONNECTION -> "close")))
     }
 
     val (requestHeader, handler): (RequestHeader, Handler) = tryRequest match {
+      case Failure(exception: IllegalArgumentException) if exception.getMessage.startsWith("invalid hex byte") =>
+        clientError(Status.BAD_REQUEST, exception.getMessage, bypassErrorHandler = true)
       case Failure(exception: TooLongFrameException) => clientError(Status.REQUEST_URI_TOO_LONG, exception.getMessage)
       case Failure(exception)                        => clientError(Status.BAD_REQUEST, exception.getMessage)
       case Success(untagged) =>
-        if (untagged.headers
-              .get(HeaderNames.CONTENT_LENGTH)
-              .flatMap(clh => catching(classOf[NumberFormatException]).opt(clh.toLong))
-              .exists(_ > maxContentLength)) {
+        if (
+          untagged.headers
+            .get(HeaderNames.CONTENT_LENGTH)
+            .flatMap(clh => catching(classOf[NumberFormatException]).opt(clh.toLong))
+            .exists(_ > maxContentLength)
+        ) {
           clientError(Status.REQUEST_ENTITY_TOO_LARGE, "Request Entity Too Large")
         } else {
           val debugHeader: RequestHeader = attachDebugInfo(untagged)
@@ -132,9 +143,9 @@ private[play] class PlayRequestHandler(
     }
 
     handler match {
-      //execute normal action
+      // execute normal action
       case action: EssentialAction =>
-        handleAction(action, requestHeader, request, tryApp)
+        handleAction(action, requestHeader, request, tryApp, true)
 
       case ws: WebSocket if requestHeader.headers.get(HeaderNames.UPGRADE).exists(_.equalsIgnoreCase("websocket")) =>
         logger.trace("Serving this request with: " + ws)
@@ -170,7 +181,7 @@ private[play] class PlayRequestHandler(
               }
           }
 
-      //handle bad websocket request
+      // handle bad websocket request
       case ws: WebSocket =>
         logger.trace(s"Bad websocket request: $request")
         val action = EssentialAction(_ =>
@@ -193,7 +204,7 @@ private[play] class PlayRequestHandler(
     }
   }
 
-  //----------------------------------------------------------------
+  // ----------------------------------------------------------------
   // Netty overrides
 
   override def channelRead(ctx: ChannelHandlerContext, msg: Object): Unit = {
@@ -272,7 +283,7 @@ private[play] class PlayRequestHandler(
     ctx.read()
   }
 
-  //----------------------------------------------------------------
+  // ----------------------------------------------------------------
   // Private methods
 
   /**
@@ -282,7 +293,8 @@ private[play] class PlayRequestHandler(
       action: EssentialAction,
       requestHeader: RequestHeader,
       request: HttpRequest,
-      tryApp: Try[Application]
+      tryApp: Try[Application],
+      deferredBodyParsingAllowed: Boolean = false
   ): Future[HttpResponse] = {
     implicit val mat: Materializer = tryApp match {
       case Success(app) => app.materializer
@@ -290,16 +302,19 @@ private[play] class PlayRequestHandler(
     }
     import play.core.Execution.Implicits.trampoline
 
-    // Execute the action on the Play default execution context
-    val actionFuture = Future(action(requestHeader))(mat.executionContext)
-    for {
-      // Execute the action and get a result, calling errorHandler if errors happen in this process
-      actionResult <- actionFuture
+    // Captures the Netty HttpRequest and the (implicit) materializer.
+    // Meaning no matter if parsing is deferred, it always uses the same materializer.
+    def invokeAction(actionFuture: Future[Accumulator[ByteString, Result]], deferBodyParsing: Boolean): Future[Result] =
+      actionFuture
         .flatMap { acc =>
-          val body = modelConversion(tryApp).convertRequestBody(request)
-          body match {
-            case None         => acc.run()
-            case Some(source) => acc.run(source)
+          if (deferBodyParsing) {
+            acc.run() // don't parse anything
+          } else {
+            val body = modelConversion(tryApp).convertRequestBody(request)
+            body match {
+              case None         => acc.run()
+              case Some(source) => acc.run(source)
+            }
           }
         }
         .recoverWith {
@@ -307,6 +322,18 @@ private[play] class PlayRequestHandler(
             logger.error("Cannot invoke the action", error)
             errorHandler(tryApp).onServerError(requestHeader, error)
         }
+
+    val deferBodyParsing = deferredBodyParsingAllowed &&
+      Server.routeModifierDefersBodyParsing(deferBodyParsingGlobal, requestHeader)
+    // Execute the action on the Play default execution context
+    val actionFuture = Future(action(if (deferBodyParsing) {
+      requestHeader.addAttr(RequestAttrKey.DeferredBodyParsing, invokeAction _)
+    } else {
+      requestHeader
+    }))(mat.executionContext)
+    for {
+      // Execute the action and get a result, calling errorHandler if errors happen in this process
+      actionResult <- invokeAction(actionFuture, deferBodyParsing)
       // Clean and validate the action's result
       validatedResult <- {
         val cleanedResult = resultUtils(tryApp).prepareCookies(requestHeader, actionResult)

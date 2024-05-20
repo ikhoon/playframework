@@ -4,8 +4,8 @@
 
 package play.filters.csp
 
-import play.api.Configuration
 import play.api.mvc.RequestHeader
+import play.api.Configuration
 
 /**
  * CSP Configuration.
@@ -27,9 +27,9 @@ case class CSPConfig(
 ) {
   import java.{ util => ju }
 
-  import play.mvc.Http.{ RequestHeader => JRequestHeader }
-
   import scala.jdk.FunctionConverters._
+
+  import play.mvc.Http.{ RequestHeader => JRequestHeader }
 
   /** Java Constructor */
   def this() = this(reportOnly = true)
@@ -88,7 +88,7 @@ object CSPConfig {
     @inline def checkRouteModifiers(rh: RequestHeader): Boolean = {
       import play.api.routing.Router.RequestImplicits._
       if (whitelistModifiers.isEmpty) {
-        blacklistModifiers.exists(rh.hasRouteModifier)
+        blacklistModifiers.isEmpty || blacklistModifiers.exists(rh.hasRouteModifier)
       } else {
         !whitelistModifiers.exists(rh.hasRouteModifier)
       }

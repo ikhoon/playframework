@@ -4,14 +4,15 @@
 
 package play.core.server.common
 
-import akka.NotUsed
-import akka.stream._
-import akka.stream.scaladsl._
-import akka.stream.stage._
-import akka.util.ByteString
-import play.api.Logger
-import play.api.http.websocket._
 import scala.concurrent.duration._
+
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.NotUsed
+import play.api.http.websocket._
+import play.api.Logger
 
 object WebSocketFlowHandler {
 
@@ -188,7 +189,7 @@ object WebSocketFlowHandler {
         setHandler(
           appOut,
           new OutHandler {
-            override def onPull() = {
+            override def onPull(): Unit = {
               // We always pull from the remote in when the app pulls, even if closing, since if we get a message from
               // the client and we're still open, we still want to send it.
               if (!hasBeenPulled(remoteIn)) {
@@ -196,7 +197,7 @@ object WebSocketFlowHandler {
               }
             }
 
-            override def onDownstreamFinish() = {
+            override def onDownstreamFinish(cause: Throwable): Unit = {
               if (state == Open) {
                 serverInitiatedClose(CloseMessage(Some(CloseCodes.Regular)))
               }
@@ -213,7 +214,7 @@ object WebSocketFlowHandler {
               if (state == Open) {
                 val statusCode = """(\d+)""".r
                 ex.getMessage match {
-                  case s"Invalid close frame getStatus code: ${statusCode(code) }" => // Parse Netty error message
+                  case s"Invalid close frame getStatus code: ${statusCode(code)}" => // Parse Netty error message
                     push(appOut, CloseMessage(code.toInt)) // Forward down to app
                   case _ => // Don't log the whole exception to not overwhelm the logs in case failures occur often
                     logger.warn(s"WebSocket communication problem: ${ex.getMessage}")

@@ -59,11 +59,9 @@ There are also [optional matchers](https://etorreborre.github.io/specs2/guide/SP
 
 Mocks are used to isolate unit tests against external dependencies.  For example, if your class depends on an external `DataService` class, you can feed appropriate data to your class without instantiating a `DataService` object.
 
-[Mockito](https://github.com/mockito/mockito) is integrated into specs2 as the default [mocking library](https://etorreborre.github.io/specs2/guide/SPECS2-3.6.6/org.specs2.guide.UseMockito.html).
+To make use of [Mockito](https://github.com/mockito/mockito), a popular mocking library, add the following import:
 
-To use Mockito, add the following import:
-
-@[import-mockito](code/models/UserSpec.scala)
+@[import-mockito](code/specs2/UserServiceSpec.scala)
 
 You can mock out references to classes like so:
 
@@ -159,7 +157,7 @@ Or, if you are using a form that uses `CSRF.formField` and requires an implicit 
 
 Testing [`Action`](api/scala/play/api/mvc/Action.html) or [`Filter`](api/scala/play/api/mvc/Filter.html) can require to test an [`EssentialAction`](api/scala/play/api/mvc/EssentialAction.html) ([[more information about what an EssentialAction is|ScalaEssentialAction]])
 
-For this, the test [`Helpers.call()`](api/scala/play/api/test/Helpers$.html#call[T]\(action:play.api.mvc.EssentialAction,rh:play.api.mvc.RequestHeader,body:T\)\(implicitw:play.api.http.Writeable[T],implicitmat:akka.stream.Materializer\):scala.concurrent.Future[play.api.mvc.Result]) can be used like that:
+For this, the test [`Helpers.call()`](api/scala/play/api/test/Helpers$.html#call[T]\(action:play.api.mvc.EssentialAction,rh:play.api.mvc.RequestHeader,body:T\)\(implicitw:play.api.http.Writeable[T],implicitmat:pekko.stream.Materializer\):scala.concurrent.Future[play.api.mvc.Result]) can be used like that:
 
 @[scalatest-exampleessentialactionspec](code/specs2/ExampleEssentialActionSpec.scala)
 

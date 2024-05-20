@@ -7,18 +7,18 @@ package play.api.cache
 import java.time.Instant
 import javax.inject.Inject
 
-import akka.stream.Materializer
+import scala.concurrent.duration._
+import scala.concurrent.Future
+
+import org.apache.pekko.stream.Materializer
 import play.api._
 import play.api.http.HeaderNames.ETAG
 import play.api.http.HeaderNames.EXPIRES
 import play.api.http.HeaderNames.IF_NONE_MATCH
-import play.api.libs.Codecs
 import play.api.libs.streams.Accumulator
-import play.api.mvc.Results.NotModified
+import play.api.libs.Codecs
 import play.api.mvc._
-
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import play.api.mvc.Results.NotModified
 
 /**
  * A helper to add caching to an Action.
@@ -262,7 +262,7 @@ final class CachedBuilder(
    * The returned cache will store all responses whatever they may contain
    * @param duration how long we should store responses
    */
-  def default(duration: Duration): CachedBuilder = compose({ case _: ResponseHeader => duration })
+  def default(duration: Duration): CachedBuilder = compose { case _: ResponseHeader => duration }
 
   /**
    * The returned cache will store all responses whatever they may contain
@@ -272,7 +272,7 @@ final class CachedBuilder(
 
   /**
    * Compose the cache with new caching function
-   * @param alternative a closure getting the reponseheader and returning the duration
+   * @param alternative a closure getting the response header and returning the duration
    *        we should cache for
    */
   def compose(alternative: PartialFunction[ResponseHeader, Duration]): CachedBuilder = new CachedBuilder(

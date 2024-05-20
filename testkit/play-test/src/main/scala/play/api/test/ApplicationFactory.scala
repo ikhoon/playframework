@@ -4,8 +4,7 @@
 
 package play.api.test
 
-import akka.annotation.ApiMayChange
-
+import org.apache.pekko.annotation.ApiMayChange
 import play.api._
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.mvc._
@@ -48,7 +47,7 @@ import play.api.routing.Router
     }
   }
 
-  final def withAction(createAction: DefaultActionBuilder => Action[_]): ApplicationFactory = withRouter {
+  final def withAction(createAction: DefaultActionBuilder => Action[?]): ApplicationFactory = withRouter {
     (components: BuiltInComponents) =>
       val action = createAction(components.defaultActionBuilder)
       Router.from { case _ => action }

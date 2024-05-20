@@ -23,53 +23,63 @@ jobs:
     name: Extra variables
     runs-on: ubuntu-20.04
     outputs:
-      akka_version_opts: ${{ steps.akka-snapshots.outputs.akka_opts }}
-      akka_http_version_opts: ${{ steps.akka-snapshots.outputs.akka_http_opts }}
+      pekko_version_opts: ${{ steps.pekko-snapshots.outputs.pekko_opts }}
+      pekko_http_version_opts: ${{ steps.pekko-snapshots.outputs.pekko_http_opts }}
     steps:
-      - id: akka-snapshots
+      - id: pekko-snapshots
         run: |
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            AKKA_VERSION=$(curl -s https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-actor_2.13/ | grep -oEi '2\.6\.[0-9]+\+[RCM0-9]+-[0-9a-f]{8}-SNAPSHOT' | sort -V | tail -n 1)
-            AKKA_HTTP_VERSION=$(curl -s https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-http-core_2.13/ | grep -oEi '10\.1\.[0-9]+\+[RCM0-9]+-[0-9a-f]{8}-SNAPSHOT' | sort -V | tail -n 1)
-            echo "akka_opts=-Dakka.version=$AKKA_VERSION" >> $GITHUB_OUTPUT
-            echo "akka_http_opts=-Dakka.http.version=$AKKA_HTTP_VERSION" >> $GITHUB_OUTPUT
+            PEKKO_VERSION=$(curl -s https://repository.apache.org/content/repositories/snapshots/org/apache/pekko/pekko-actor_2.13/ | grep -oEi '1\.1\.[0-9]+\-[RCM0-9]+\+[0-9]+-[0-9a-f]{8}-SNAPSHOT' | sort -V | tail -n 1)
+            PEKKO_HTTP_VERSION=$(curl -s https://repository.apache.org/content/repositories/snapshots/org/apache/pekko/pekko-http-core_2.13/ | grep -oEi '1\.1\.[0-9]+\-[RCM0-9]+\+[0-9]+-[0-9a-f]{8}-SNAPSHOT' | sort -V | tail -n 1)
+            echo "pekko_opts=-Dpekko.version=$PEKKO_VERSION" >> $GITHUB_OUTPUT
+            echo "pekko_http_opts=-Dpekko.http.version=$PEKKO_HTTP_VERSION" >> $GITHUB_OUTPUT
           else
-            echo "akka_opts=" >> $GITHUB_OUTPUT
-            echo "akka_http_opts=" >> $GITHUB_OUTPUT
+            echo "pekko_opts=" >> $GITHUB_OUTPUT
+            echo "pekko_http_opts=" >> $GITHUB_OUTPUT
           fi
 
   prefetch-for-caching:
     name: Prefetch dependencies and JVMs for caching
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
       cmd: |
         if [ "$CACHE_HIT_COURSIER" = "false" ]; then
           sbt +update                                             # Runs with adoptium:8 (default)
-          # sbt --sbt-version 1.7.2 +update                       # If we run scripted tests with multiple sbt versions, we could init that sbt installs here
+          # sbt --sbt-version 1.10.0 +update                      # If we run scripted tests with multiple sbt versions, we could init that sbt installs here
           sbt +mimaPreviousClassfiles                             # Fetches previous artifacts
           cd documentation && sbt +update && cd ..                # Fetches dependencies of the documentation project
-          sbt -java-home `cs java-home --jvm adoptium:11` exit    # Init sbt with new JVM that will be downloaded
           sbt -java-home `cs java-home --jvm adoptium:17` exit    # Init sbt with new JVM that will be downloaded
+          # sbt -java-home `cs java-home --jvm adoptium:21` exit    # Init sbt with new JVM that will be downloaded
         fi
 
+  # Run Gradle Wrapper Validation to verify the wrapper's checksum
+  gradle-validation:
+    name: Gradle Wrapper
+    uses: playframework/.github/.github/workflows/gradle-wrapper-validation.yml@v4
+
   check-code-style:
-    name: Code Style # scalafmt, javafmt, file headers, akka version check
+    name: Code Style # scalafmt, javafmt, file headers, pekko version check
     needs:
       - "extra-vars"
       - "prefetch-for-caching"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+      - "gradle-validation"
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      cmd: sbt "${{needs.extra-vars.outputs.akka_version_opts}}" "${{needs.extra-vars.outputs.akka_http_version_opts}}" validateCode
+      cmd: |
+        sbt "${{needs.extra-vars.outputs.pekko_version_opts}}" "${{needs.extra-vars.outputs.pekko_http_version_opts}}" savePlayVersion validateCode
+        cd dev-mode/gradle-plugin
+        ./gradlew clean spotlessCheck --no-daemon
+      gradle-build-root: dev-mode/gradle-plugin
 
   check-binary-compatibility:
     name: Binary Compatibility
     needs: "prefetch-for-caching"
-    uses: playframework/.github/.github/workflows/binary-check.yml@v3
+    uses: playframework/.github/.github/workflows/binary-check.yml@v4
 
   check-code-style-docs:
     name: Code Style Docs
     needs: "prefetch-for-caching"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
       cmd: |
         cd documentation
@@ -82,82 +92,92 @@ jobs:
       - "check-code-style"
       - "check-binary-compatibility"
       - "check-code-style-docs"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      java: 17, 11
+      java: 17
+      exclude: >-
+        [
+          { "java": "${{ github.event_name == 'schedule' || '21' }}" }
+        ]
       cmd: |
-        rm -rf ~/.ivy2/local
-        sbt "${{needs.extra-vars.outputs.akka_version_opts}}" "${{needs.extra-vars.outputs.akka_http_version_opts}}" crossScalaVersions crossSbtVersions +publishLocal
-      cache-path: ~/.ivy2/local/com.typesafe.play
+        rm -rf ~/.ivy2/local ~/.m2/repository/org/playframework
+        sbt "${{needs.extra-vars.outputs.pekko_version_opts}}" "${{needs.extra-vars.outputs.pekko_http_version_opts}}" crossScalaVersions crossSbtVersions +publishLocal +publishM2
+      cache-path: |
+        ~/.ivy2/local/org.playframework
+        ~/.m2/repository/org/playframework
       cache-key: play-published-local-jdk{0}-${{ github.sha }}-${{ github.event_name != 'schedule' || github.run_id }}
 
   tests:
     name: Tests
+    if: "!contains(github.event.pull_request.labels.*.name, 'ci:skip-tests')"
     needs:
       - "extra-vars"
       - "check-code-style"
       - "check-binary-compatibility"
       - "check-code-style-docs"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      java: 17, 11
-      scala: 2.13.x
+      java: 17
+      scala: 2.13.x, 3.x
       add-dimensions: >-
         {
-          "sbt_test_task": [ "test", "Play-Integration-Test/It/test", "Play-Microbenchmark/jmh:run -i 1 -wi 0 -f 1 -t 1 -foe=true" ]
+          "sbt_test_task": [ "test", "Play-Microbenchmark/jmh:run -i 1 -wi 0 -f 1 -t 1 -foe=true" ]
         }
       exclude: >-
         [
-          { "java": "${{ github.event_name == 'schedule' || '17' }}" },
+          { "java": "${{ github.event_name == 'schedule' || '21' }}" },
           { "sbt_test_task": "${{ github.event_name == 'schedule' || 'Play-Microbenchmark/jmh:run -i 1 -wi 0 -f 1 -t 1 -foe=true' }}" }
         ]
       cmd: >-
         if [ "$MATRIX_JAVA" = 17 ]; then
-          export JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS --add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.ssl=ALL-UNNAMED";
+          export JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS --add-exports=java.base/sun.security.x509=ALL-UNNAMED";
         fi;
-        sbt "${{needs.extra-vars.outputs.akka_version_opts}}" "${{needs.extra-vars.outputs.akka_http_version_opts}}" ++$MATRIX_SCALA "$MATRIX_SBT_TEST_TASK"
+        sbt "${{needs.extra-vars.outputs.pekko_version_opts}}" "${{needs.extra-vars.outputs.pekko_http_version_opts}}" ++$MATRIX_SCALA "$MATRIX_SBT_TEST_TASK"
 
   docs-tests:
     name: Docs Tests
+    if: "!contains(github.event.pull_request.labels.*.name, 'ci:skip-docs-tests')"
     needs:
       - "extra-vars"
       - "check-code-style"
       - "check-binary-compatibility"
       - "check-code-style-docs"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      java: 17, 11
-      scala: 2.13.x
+      java: 17
+      scala: 2.13.x, 3.x
       exclude: >-
         [
-          { "java": "${{ github.event_name == 'schedule' || '17' }}" }
+          { "java": "${{ github.event_name == 'schedule' || '21' }}" }
         ]
-      cmd: cd documentation && sbt "${{needs.extra-vars.outputs.akka_version_opts}}" "${{needs.extra-vars.outputs.akka_http_version_opts}}" ++$MATRIX_SCALA test
+      cmd: >-
+        cd documentation && sbt "${{needs.extra-vars.outputs.pekko_version_opts}}" "${{needs.extra-vars.outputs.pekko_http_version_opts}}" ++$MATRIX_SCALA test
 
   scripted-tests:
     name: Scripted Tests
+    if: "!contains(github.event.pull_request.labels.*.name, 'ci:skip-scripted-tests')"
     needs:
       - "extra-vars"
       - "publish-local"
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      java: 17, 11
-      scala: 2.13.x
+      java: 17
+      scala: 2.13.x, 3.x
       add-dimensions: >-
         {
-          "sbt": [ "1.7.2" ],
+          "sbt": [ "1.10.0" ],
           "sbt_steps": [ "*1of3", "*2of3", "*3of3" ]
         }
       exclude: >-
         [
-          { "java": "${{ github.event_name == 'schedule' || '17' }}" }
+          { "java": "${{ github.event_name == 'schedule' || '21' }}" }
         ]
       cmd: >-
         if [ "$MATRIX_JAVA" = 17 ]; then
           export JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS --add-exports=java.base/sun.security.x509=ALL-UNNAMED";
         fi;
         export SCALA_CROSS_VERSIONS=`sbt -batch -error 'print Play/crossScalaVersions' | sed "s/\*//g" | xargs`;
-        sbt "${{needs.extra-vars.outputs.akka_version_opts}}" "${{needs.extra-vars.outputs.akka_http_version_opts}}" "
+        sbt "${{needs.extra-vars.outputs.pekko_version_opts}}" "${{needs.extra-vars.outputs.pekko_http_version_opts}}" "
           project Sbt-Plugin;
           set scriptedSbt := \"$MATRIX_SBT\";
           set scriptedLaunchOpts += \"-Dscala.version=$MATRIX_SCALA\";
@@ -166,26 +186,33 @@ jobs:
           show scriptedLaunchOpts;
           scripted play-sbt-plugin/$MATRIX_SBT_STEPS
         "
-      cache-path: ~/.ivy2/local/com.typesafe.play
+      cache-path: |
+        ~/.ivy2/local/org.playframework
+        ~/.m2/repository/org/playframework
       cache-key: play-published-local-jdk{0}-${{ github.sha }}-${{ github.event_name != 'schedule' || github.run_id }}
 
-  scala3-compilation:
-    name: Build with Scala3
-    uses: playframework/.github/.github/workflows/cmd.yml@v3
+  gradle-plugin-tests:
+    name: Gradle Plugin Tests
+    needs:
+      - "extra-vars"
+      - "publish-local"
+    uses: playframework/.github/.github/workflows/cmd.yml@v4
     with:
-      java: 11
-      scala: 3.x
-      # doing nothing for now, but as we progress we should add here the modules that are ready for compilation
-      # with Scala 3
-      # sbt "-Dscala.version=$SCALA_VERSION
-      #  Play / compile
-      #  Play / Test / compile
-      #  "
-      cmd: >-
-        sbt -Dscala.version=$MATRIX_SCALA scalaVersion "
-          Sbt-Routes-Compiler / test;
-          Play-Streams / test;
-        "
+      java: 17
+      scala: 2.13.x, 3.x
+      exclude: >-
+        [
+          { "java": "${{ github.event_name == 'schedule' || '21' }}" }
+        ]
+      cmd: |
+        sbt savePlayVersion
+        cd dev-mode/gradle-plugin
+        ./gradlew clean check -x spotlessCheck --no-daemon -Pscala.version="$MATRIX_SCALA"
+      gradle-build-root: dev-mode/gradle-plugin
+      cache-path: |
+        ~/.ivy2/local/org.playframework
+        ~/.m2/repository/org/playframework
+      cache-key: play-published-local-jdk{0}-${{ github.sha }}-${{ github.event_name != 'schedule' || github.run_id }}
 
   finish:
     name: Finish
@@ -194,4 +221,5 @@ jobs:
       - "tests"
       - "docs-tests"
       - "scripted-tests"
-    uses: playframework/.github/.github/workflows/rtm.yml@v3
+      - "gradle-plugin-tests"
+    uses: playframework/.github/.github/workflows/rtm.yml@v4

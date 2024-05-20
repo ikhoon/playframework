@@ -7,7 +7,8 @@ package scalaguide.async.scalaasync
 import javax.inject.Inject
 
 import scala.concurrent._
-import akka.actor._
+
+import org.apache.pekko.actor._
 import play.api._
 import play.api.mvc._
 import play.api.test._
@@ -17,20 +18,28 @@ class ScalaAsyncSpec extends PlaySpecification {
 
   "scala async" should {
     "allow returning a future" in new WithApplication() {
-      contentAsString(samples.futureResult) must startWith("PI value computed: 3.14")
+      override def running() = {
+        contentAsString(samples.futureResult) must startWith("PI value computed: 3.14")
+      }
     }
 
     "allow dispatching an intensive computation" in new WithApplication() {
-      await(samples.intensiveComp) must_== 10
+      override def running() = {
+        await(samples.intensiveComp) must_== 10
+      }
     }
 
     "allow returning an async result" in new WithApplication() {
-      contentAsString(samples.asyncResult()(FakeRequest())) must_== "Got result: 10"
+      override def running() = {
+        contentAsString(samples.asyncResult()(FakeRequest())) must_== "Got result: 10"
+      }
     }
 
     "allow timing out a future" in new WithApplication() {
-      status(samples.timeout(1200)(FakeRequest())) must_== INTERNAL_SERVER_ERROR
-      status(samples.timeout(10)(FakeRequest())) must_== OK
+      override def running() = {
+        status(samples.timeout(1200)(FakeRequest())) must_== INTERNAL_SERVER_ERROR
+        status(samples.timeout(10)(FakeRequest())) must_== OK
+      }
     }
   }
 }
@@ -63,32 +72,32 @@ class ScalaAsyncSamples @Inject() (val controllerComponents: ControllerComponent
 ) extends BaseController {
   def futureResult = {
     def computePIAsynchronously() = Future.successful(3.14)
-    //#future-result
+    // #future-result
 
     val futurePIValue: Future[Double] = computePIAsynchronously()
     val futureResult: Future[Result]  = futurePIValue.map { pi => Ok("PI value computed: " + pi) }
-    //#future-result
+    // #future-result
     futureResult
   }
 
   def intensiveComputation() = 10
 
   def intensiveComp = {
-    //#intensive-computation
+    // #intensive-computation
     val futureInt: Future[Int] = scala.concurrent.Future {
       intensiveComputation()
     }
-    //#intensive-computation
+    // #intensive-computation
     futureInt
   }
 
   def asyncResult = {
-    //#async-result
+    // #async-result
     def index = Action.async {
       val futureInt = scala.concurrent.Future { intensiveComputation() }
       futureInt.map(i => Ok("Got result: " + i))
     }
-    //#async-result
+    // #async-result
 
     index
   }
@@ -99,7 +108,7 @@ class ScalaAsyncSamples @Inject() (val controllerComponents: ControllerComponent
       10
     }
 
-    //#timeout
+    // #timeout
     import scala.concurrent.duration._
     import play.api.libs.concurrent.Futures._
 
@@ -114,7 +123,7 @@ class ScalaAsyncSamples @Inject() (val controllerComponents: ControllerComponent
             InternalServerError("timeout")
         }
     }
-    //#timeout
+    // #timeout
     index
   }
 }

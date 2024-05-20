@@ -4,22 +4,23 @@
 
 package play.libs;
 
-import akka.NotUsed;
-import akka.stream.javadsl.Flow;
-import akka.util.ByteString;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.pekko.NotUsed;
+import org.apache.pekko.stream.javadsl.Flow;
+import org.apache.pekko.util.ByteString;
 
 /**
  * This class provides an easy way to use Server Sent Events (SSE) as a chunked encoding, using an
- * Akka Source.
+ * Pekko Source.
  *
- * <p>Please see the <a href="http://dev.w3.org/html5/eventsource/">Server-Sent Events
+ * <p>Please see the <a
+ * href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events
  * specification</a> for details.
  *
  * <p>Example implementation of EventSource in a Controller:
  *
- * <p>{{{ //import akka.stream.javadsl.Source; //import play.mvc.*; //import play.libs.*; //import
- * java.time.ZonedDateTime; //import java.time.format.*; //import
+ * <p>{{{ //import org.apache.pekko.stream.javadsl.Source; //import play.mvc.*; //import
+ * play.libs.*; //import java.time.ZonedDateTime; //import java.time.format.*; //import
  * scala.concurrent.duration.Duration; //import static java.util.concurrent.TimeUnit.*; //import
  * static play.libs.EventSource.Event.event; //private final DateTimeFormatter df =
  * DateTimeFormatter.ofPattern("HH mm ss");

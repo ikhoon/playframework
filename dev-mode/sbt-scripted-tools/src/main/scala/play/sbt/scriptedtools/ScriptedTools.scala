@@ -7,7 +7,6 @@ package play.sbt.scriptedtools
 import java.nio.file.Files
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
-
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
@@ -21,25 +20,23 @@ import sbt._
 import sbt.Keys._
 
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
-
 import play.sbt.routes.RoutesCompiler.autoImport._
 import play.sbt.run.PlayRun
 
 object ScriptedTools extends AutoPlugin {
   override def trigger = allRequirements
 
-  override def projectSettings: Seq[Def.Setting[_]] = Def.settings(
+  override def projectSettings: Seq[Def.Setting[?]] = Def.settings(
     resolvers ++= Resolver.sonatypeOssRepos("releases"), // sync BuildSettings.scala
-    // This is copy/pasted from AkkaSnapshotRepositories since scripted tests also need
+    // This is copy/pasted from PekkoSnapshotRepositories since scripted tests also need
     // the snapshot resolvers in `cron` builds.
     // If this is a scheduled GitHub Action
     // https://docs.github.com/en/actions/learn-github-actions/environment-variables
     resolvers ++= sys.env
       .get("GITHUB_EVENT_NAME")
       .filter(_.equalsIgnoreCase("schedule"))
-      .map(_ => Resolver.sonatypeOssRepos("snapshots")) // contains akka(-http) snapshots
+      .map(_ => Resolver.ApacheMavenSnapshotsRepo) // contains pekko(-http) snapshots
       .toSeq
-      .flatten
   )
 
   def scalaVersionFromJavaProperties() =

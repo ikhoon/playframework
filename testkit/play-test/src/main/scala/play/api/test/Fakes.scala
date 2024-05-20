@@ -7,18 +7,18 @@ package play.api.test
 import java.net.URI
 import java.security.cert.X509Certificate
 
-import akka.util.ByteString
+import scala.xml.NodeSeq
+
+import org.apache.pekko.util.ByteString
 import play.api.http.HeaderNames
 import play.api.http.HttpConfiguration
-import play.api.libs.Files.SingletonTemporaryFileCreator
-import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.JsValue
 import play.api.libs.typedmap.TypedMap
+import play.api.libs.Files.SingletonTemporaryFileCreator
+import play.api.libs.Files.TemporaryFile
 import play.api.mvc._
 import play.api.mvc.request._
 import play.core.parsers.FormUrlEncodedParser
-
-import scala.xml.NodeSeq
 
 /**
  * Fake HTTP headers implementation.
@@ -216,7 +216,7 @@ class FakeRequestFactory(requestFactory: RequestFactory) {
       },
       version,
       headers,
-      attrs + (RequestAttrKey.Id -> id),
+      attrs.updated(RequestAttrKey.Id -> id),
       body
     )
     new FakeRequest(request)

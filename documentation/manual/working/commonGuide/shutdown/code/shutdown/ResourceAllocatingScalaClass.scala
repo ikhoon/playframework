@@ -6,9 +6,11 @@ package shutdown
 
 import java.util.concurrent.CompletionStage
 import javax.inject.Inject
-import akka.actor.CoordinatedShutdown
+
 import scala.concurrent.Future
-import akka.Done
+
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.Done
 
 package scalaguide {
 //#shutdown-task

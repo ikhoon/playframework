@@ -6,9 +6,11 @@ package play.api
 
 import java.io.File
 
-import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
-import akka.stream.Materializer
+import scala.concurrent.Future
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.stream.Materializer
 import play.api.http.DefaultHttpErrorHandler
 import play.api.http.HttpErrorHandler
 import play.api.http.HttpRequestHandler
@@ -16,8 +18,6 @@ import play.api.http.NotImplementedHttpRequestHandler
 import play.api.libs.concurrent.ActorSystemProvider
 import play.api.mvc.request.DefaultRequestFactory
 import play.api.mvc.request.RequestFactory
-
-import scala.concurrent.Future
 
 /**
  * Fake application as used by Play core tests.  This is needed since Play core can't depend on the Play test API.

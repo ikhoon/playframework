@@ -5,10 +5,12 @@
 package play.api.cache
 
 import java.io._
-import akka.util.ByteString
+
+import scala.annotation.tailrec
+
+import org.apache.pekko.util.ByteString
 import play.api.http.HttpEntity
 import play.api.mvc._
-import scala.annotation.tailrec
 
 /**
  * Wraps a Result to make it Serializable.

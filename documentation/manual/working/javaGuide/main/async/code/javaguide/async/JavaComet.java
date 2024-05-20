@@ -11,8 +11,8 @@ import javaguide.testhelpers.MockJavaActionHelper;
 import org.junit.Test;
 
 // #comet-imports
-import akka.NotUsed;
-import akka.stream.javadsl.Source;
+import org.apache.pekko.NotUsed;
+import org.apache.pekko.stream.javadsl.Source;
 import play.core.j.JavaHandlerComponents;
 import play.libs.Comet;
 import play.libs.Json;
@@ -25,8 +25,7 @@ import play.test.WithApplication;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static play.test.Helpers.contentAsString;
 import static play.test.Helpers.fakeRequest;
 
@@ -71,9 +70,9 @@ public class JavaComet extends WithApplication {
                 fakeRequest(),
                 mat),
             mat);
-    assertThat(content, containsString("<script>parent.cometMessage('kiki');</script>"));
-    assertThat(content, containsString("<script>parent.cometMessage('foo');</script>"));
-    assertThat(content, containsString("<script>parent.cometMessage('bar');</script>"));
+    assertThat(content).contains("<script>parent.cometMessage('kiki');</script>");
+    assertThat(content).contains("<script>parent.cometMessage('foo');</script>");
+    assertThat(content).contains("<script>parent.cometMessage('bar');</script>");
   }
 
   @Test
@@ -85,6 +84,6 @@ public class JavaComet extends WithApplication {
                 fakeRequest(),
                 mat),
             mat);
-    assertThat(content, containsString("<script>parent.cometMessage({\"foo\":\"bar\"});</script>"));
+    assertThat(content).contains("<script>parent.cometMessage({\"foo\":\"bar\"});</script>");
   }
 }

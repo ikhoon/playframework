@@ -4,13 +4,13 @@
 
 package play.filters.csrf
 
-import play.api.Application
+import scala.concurrent.Future
+
 import play.api.http.HttpErrorHandler
 import play.api.libs.ws.WSRequest
 import play.api.libs.ws.WSResponse
 import play.api.mvc._
-
-import scala.concurrent.Future
+import play.api.Application
 
 /**
  * Specs for the Scala per action CSRF actions
@@ -32,7 +32,7 @@ class ScalaCSRFActionSpec extends CSRFCommonSpecs {
             val csrfAction = csrfCheck(app)
             csrfAction(myAction(req => Results.Ok))
           }
-      }) { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      }) { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -47,7 +47,7 @@ class ScalaCSRFActionSpec extends CSRFCommonSpecs {
               .map { token => Results.Ok(token.value) }
               .getOrElse(Results.NotFound)
           })
-      }) { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      }) { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 

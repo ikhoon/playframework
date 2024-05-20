@@ -4,12 +4,17 @@
 
 package play.api.http
 
-import com.typesafe.config.ConfigMemorySize
-import io.jsonwebtoken.SignatureAlgorithm
-
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
+
+import scala.concurrent.duration._
+import scala.util.Failure
+import scala.util.Success
+
+import com.typesafe.config.ConfigMemorySize
+import io.jsonwebtoken.SignatureAlgorithm
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.libs.Codecs
@@ -18,11 +23,6 @@ import play.core.cookie.encoding.ClientCookieDecoder
 import play.core.cookie.encoding.ClientCookieEncoder
 import play.core.cookie.encoding.ServerCookieDecoder
 import play.core.cookie.encoding.ServerCookieEncoder
-
-import java.nio.charset.StandardCharsets
-import scala.concurrent.duration._
-import scala.util.Failure
-import scala.util.Success
 
 /**
  * HTTP related configuration of a Play application
@@ -154,10 +154,12 @@ case class ParserConfiguration(
  * @param controllerAnnotationsFirst      If annotations put on controllers should be executed before the ones put on actions.
  * @param executeActionCreatorActionFirst If the action returned by the action creator should be
  *                                        executed before the action composition ones.
+ * @param includeWebSocketActions         If WebSocket actions should be included in action composition.
  */
 case class ActionCompositionConfiguration(
     controllerAnnotationsFirst: Boolean = false,
-    executeActionCreatorActionFirst: Boolean = false
+    executeActionCreatorActionFirst: Boolean = false,
+    includeWebSocketActions: Boolean = false,
 )
 
 /**
@@ -196,7 +198,7 @@ object HttpConfiguration {
 
           case _ => // "foo=bar".span(_ != '=') -> (foo,=bar)
             line.span(_ != '=') match {
-              case (key, v) => Some(key -> v.drop(1)) // '=' prefix
+              case (key, v) => Some(key -> v.drop(1))         // '=' prefix
               case _        => Option.empty[(String, String)] // skip invalid
             }
         }
@@ -235,7 +237,8 @@ object HttpConfiguration {
       actionComposition = ActionCompositionConfiguration(
         controllerAnnotationsFirst = config.get[Boolean]("play.http.actionComposition.controllerAnnotationsFirst"),
         executeActionCreatorActionFirst =
-          config.get[Boolean]("play.http.actionComposition.executeActionCreatorActionFirst")
+          config.get[Boolean]("play.http.actionComposition.executeActionCreatorActionFirst"),
+        includeWebSocketActions = config.get[Boolean]("play.http.actionComposition.includeWebSocketActions"),
       ),
       cookies = CookiesConfiguration(
         strict = config.get[Boolean]("play.http.cookies.strict")

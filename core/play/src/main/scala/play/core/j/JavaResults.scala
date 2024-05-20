@@ -4,16 +4,15 @@
 
 package play.core.j
 
-import play.mvc.{ ResponseHeader => JResponseHeader }
-
 import scala.annotation.varargs
-import scala.jdk.CollectionConverters
 import scala.language.reflectiveCalls
+
+import play.mvc.{ ResponseHeader => JResponseHeader }
 
 object JavaResultExtractor {
   @varargs
   def withHeader(responseHeader: JResponseHeader, nameValues: String*): JResponseHeader = {
-    import CollectionConverters._
+    import scala.jdk.CollectionConverters._
     if (nameValues.length % 2 != 0) {
       throw new IllegalArgumentException(
         "Unmatched name - withHeaders must be invoked with an even number of string arguments"

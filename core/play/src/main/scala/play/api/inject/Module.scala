@@ -6,12 +6,12 @@ package play.api.inject
 
 import java.lang.reflect.Constructor
 
+import scala.annotation.varargs
+import scala.reflect.ClassTag
+
 import play.{ Environment => JavaEnvironment }
 import play.api._
 import play.libs.reflect.ConstructorUtils
-
-import scala.annotation.varargs
-import scala.reflect.ClassTag
 
 /**
  * A Play dependency injection module.
@@ -58,7 +58,7 @@ abstract class Module {
    * @param configuration The configuration
    * @return A sequence of bindings
    */
-  def bindings(environment: Environment, configuration: Configuration): scala.collection.Seq[Binding[_]]
+  def bindings(environment: Environment, configuration: Configuration): scala.collection.Seq[Binding[?]]
 
   /**
    * Create a binding key for the given class.
@@ -81,16 +81,19 @@ abstract class Module {
    */
   @deprecated("Use play.inject.Module instead if the Module is coded in Java.", "2.7.0")
   @varargs
-  final def seq(bindings: Binding[_]*): scala.collection.Seq[Binding[_]] = bindings
+  final def seq(bindings: Binding[?]*): scala.collection.Seq[Binding[?]] = bindings
 }
 
 /**
  * A simple Play module, which can be configured by passing a function or a list of bindings.
  */
-class SimpleModule(bindingsFunc: (Environment, Configuration) => Seq[Binding[_]]) extends Module {
-  def this(bindings: Binding[_]*) = this((_, _) => bindings)
+class SimpleModule(bindingsFunc: (Environment, Configuration) => Seq[Binding[?]]) extends Module {
+  def this(bindings: Binding[?]*) = this((_, _) => bindings)
 
-  final override def bindings(environment: Environment, configuration: Configuration) =
+  final override def bindings(
+      environment: Environment,
+      configuration: Configuration
+  ): scala.collection.Seq[Binding[?]] =
     bindingsFunc(environment, configuration)
 }
 
@@ -164,21 +167,19 @@ object Modules {
       {
         tryConstruct(environment, configuration)
       }.orElse {
-          tryConstruct(new JavaEnvironment(environment), configuration.underlying)
-        }
-        .orElse {
-          tryConstruct()
-        }
-        .getOrElse {
-          throw new PlayException(
-            "No valid constructors",
-            "Module [" + className + "] cannot be instantiated. " +
-              "Expected one of:\n" +
-              "()\n" +
-              "(play.api.Environment, play.api.Configuration)\n" +
-              "(play.Environment, com.typesafe.config.Config)"
-          )
-        }
+        tryConstruct(new JavaEnvironment(environment), configuration.underlying)
+      }.orElse {
+        tryConstruct()
+      }.getOrElse {
+        throw new PlayException(
+          "No valid constructors",
+          "Module [" + className + "] cannot be instantiated. " +
+            "Expected one of:\n" +
+            "()\n" +
+            "(play.api.Environment, play.api.Configuration)\n" +
+            "(play.Environment, com.typesafe.config.Config)"
+        )
+      }
     } catch {
       case e: PlayException       => throw e
       case e: VirtualMachineError => throw e

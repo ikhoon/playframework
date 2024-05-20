@@ -6,19 +6,19 @@ package play.filters.csp
 
 import java.util.concurrent.CompletableFuture
 
-import play.api.Application
+import scala.reflect.ClassTag
+
 import play.api.http.HeaderNames
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.mvc.BodyParser
 import play.api.test._
+import play.api.Application
 import play.core.j._
 import play.core.routing.HandlerInvokerFactory
 import play.mvc.Controller
 import play.mvc.Http
 import play.mvc.Result
 import play.mvc.Results
-
-import scala.reflect.ClassTag
 
 /**
  * Tests Java CSP action
@@ -31,7 +31,7 @@ class JavaCSPActionSpec extends PlaySpecification {
 
   def javaAction[T: ClassTag](method: String, inv: Http.Request => Result)(implicit app: Application): JavaAction =
     new JavaAction(javaHandlerComponents) {
-      val clazz: Class[_] = implicitly[ClassTag[T]].runtimeClass
+      val clazz: Class[?] = implicitly[ClassTag[T]].runtimeClass
       def parser: BodyParser[Http.RequestBody] =
         HandlerInvokerFactory.javaBodyParserToScala(javaHandlerComponents.getBodyParser(annotations.parser))
       def invocation(req: Http.Request): CompletableFuture[Result] = CompletableFuture.completedFuture(inv(req))

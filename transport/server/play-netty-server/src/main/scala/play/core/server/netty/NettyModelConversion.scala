@@ -9,21 +9,26 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.security.cert.X509Certificate
 import java.time.Instant
-
 import javax.net.ssl.SSLPeerUnverifiedException
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import com.typesafe.netty.http.DefaultStreamedHttpResponse
-import com.typesafe.netty.http.StreamedHttpRequest
+
+import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
+import scala.util.Failure
+import scala.util.Try
+
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.handler.codec.http._
 import io.netty.handler.ssl.SslHandler
 import io.netty.util.ReferenceCountUtil
-import play.api.Logger
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.playframework.netty.http.DefaultStreamedHttpResponse
+import org.playframework.netty.http.StreamedHttpRequest
 import play.api.http.HeaderNames._
 import play.api.http.HttpChunk
 import play.api.http.HttpEntity
@@ -33,15 +38,10 @@ import play.api.mvc._
 import play.api.mvc.request.RemoteConnection
 import play.api.mvc.request.RequestAttrKey
 import play.api.mvc.request.RequestTarget
+import play.api.Logger
 import play.core.server.common.ForwardedHeaderHandler
 import play.core.server.common.PathAndQueryParser
 import play.core.server.common.ServerResultUtils
-
-import scala.jdk.CollectionConverters._
-import scala.concurrent.Future
-import scala.util.control.NonFatal
-import scala.util.Failure
-import scala.util.Try
 
 private[server] class NettyModelConversion(
     resultUtils: ServerResultUtils,
@@ -99,52 +99,16 @@ private[server] class NettyModelConversion(
       override def uriString: String   = request.uri
       override val path: String        = parsedPath
       override val queryString: String = parsedQueryString.stripPrefix("?")
-      override lazy val queryMap: Map[String, Seq[String]] = {
+      override val queryMap: Map[String, Seq[String]] = {
         val decoder = new QueryStringDecoder(parsedQueryString)
         try {
           decoder.parameters().asScala.view.mapValues(_.asScala.toList).toMap
         } catch {
+          case iae: IllegalArgumentException if iae.getMessage.startsWith("invalid hex byte") => throw iae
           case NonFatal(e) =>
             logger.warn("Failed to parse query string; returning empty map.", e)
             Map.empty
         }
-      }
-    }
-  }
-
-  /**
-   * Create request target information from a Netty request where
-   * there was a parsing failure.
-   */
-  def createUnparsedRequestTarget(request: HttpRequest): RequestTarget = new RequestTarget {
-    override lazy val uri: URI     = new URI(uriString)
-    override def uriString: String = request.uri
-    override lazy val path: String = {
-      // The URI may be invalid, so instead, do a crude heuristic to drop the host and query string from it to get the
-      // path, and don't decode.
-      // RICH: This looks like a source of potential security bugs to me!
-      val withoutHost        = uriString.dropWhile(_ != '/')
-      val withoutQueryString = withoutHost.split('?').head
-      if (withoutQueryString.isEmpty) "/" else withoutQueryString
-    }
-    override lazy val queryMap: Map[String, Seq[String]] = {
-      // Very rough parse of query string that doesn't decode
-      if (request.uri.contains("?")) {
-        request.uri
-          .split("\\?", 2)(1)
-          .split('&')
-          .map { keyPair =>
-            keyPair.split("=", 2) match {
-              case Array(key)        => key -> ""
-              case Array(key, value) => key -> value
-            }
-          }
-          .groupBy(_._1)
-          .map {
-            case (name, values) => name -> values.map(_._2).toSeq
-          }
-      } else {
-        Map.empty
       }
     }
   }
@@ -165,7 +129,7 @@ private[server] class NettyModelConversion(
       headers,
       // Send an attribute so our tests can tell which kind of server we're using.
       // We only do this for the "non-default" engine, so we used to tag
-      // akka-http explicitly, so that benchmarking isn't affected by this.
+      // pekko-http explicitly, so that benchmarking isn't affected by this.
       TypedMap(RequestAttrKey.Server -> "netty")
     )
   }
@@ -290,7 +254,7 @@ private[server] class NettyModelConversion(
 
   /** Create a Netty streamed response. */
   private def createStreamedResponse(
-      stream: Source[ByteString, _],
+      stream: Source[ByteString, ?],
       httpVersion: HttpVersion,
       responseStatus: HttpResponseStatus
   )(implicit mat: Materializer) = {
@@ -300,14 +264,15 @@ private[server] class NettyModelConversion(
 
   /** Create a Netty chunked response. */
   private def createChunkedResponse(
-      chunks: Source[HttpChunk, _],
+      chunks: Source[HttpChunk, ?],
       httpVersion: HttpVersion,
       responseStatus: HttpResponseStatus
   )(implicit mat: Materializer) = {
     val publisher = chunks.runWith(Sink.asPublisher(false))
 
     val httpContentPublisher = SynchronousMappedStreams.map[HttpChunk, HttpContent](
-      publisher, {
+      publisher,
+      {
         case HttpChunk.Chunk(bytes) =>
           new DefaultHttpContent(byteStringToByteBuf(bytes))
         case HttpChunk.LastChunk(trailers) =>

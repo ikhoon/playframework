@@ -5,44 +5,44 @@
 package play.api.mvc
 
 import java.io._
-import java.nio.charset.StandardCharsets._
 import java.nio.charset._
+import java.nio.charset.StandardCharsets._
 import java.nio.file.Files
 import java.util.Locale
-
 import javax.inject.Inject
-import akka.stream._
-import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.StreamConverters
-import akka.stream.stage._
-import akka.util.ByteString
-import play.api._
-import play.api.data.DefaultFormBinding
-import play.api.data.Form
-import play.api.data.FormBinding
-import play.api.http.Status._
-import play.api.http._
-import play.api.libs.Files.SingletonTemporaryFileCreator
-import play.api.libs.Files.TemporaryFile
-import play.api.libs.Files.TemporaryFileCreator
-import play.api.libs.json._
-import play.api.libs.streams.Accumulator
-import play.api.mvc.MultipartFormData._
-import play.core.Execution
-import play.core.parsers.Multipart
-import play.utils.PlayIO
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.jdk.OptionConverters._
+import scala.util.control.Exception.catching
+import scala.util.control.NonFatal
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import scala.util.control.Exception.catching
-import scala.util.control.NonFatal
 import scala.xml._
+
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.StreamConverters
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.util.ByteString
+import play.api._
+import play.api.data.DefaultFormBinding
+import play.api.data.Form
+import play.api.data.FormBinding
+import play.api.http._
+import play.api.http.Status._
+import play.api.libs.json._
+import play.api.libs.streams.Accumulator
+import play.api.libs.Files.SingletonTemporaryFileCreator
+import play.api.libs.Files.TemporaryFile
+import play.api.libs.Files.TemporaryFileCreator
+import play.api.mvc.MultipartFormData._
+import play.core.parsers.Multipart
+import play.core.Execution
+import play.utils.PlayIO
 
 /**
  * A request body that adapts automatically according the request Content-Type.
@@ -160,6 +160,8 @@ case class MultipartFormData[A](dataParts: Map[String, Seq[String]], files: Seq[
    * Access a file part.
    */
   def file(key: String): Option[FilePart[A]] = files.find(_.key == key)
+
+  def isEmpty: Boolean = dataParts.isEmpty && files.isEmpty && badParts.isEmpty
 }
 
 /**
@@ -599,7 +601,7 @@ trait PlayBodyParsers extends BodyParserUtils {
   def text: BodyParser[String] = text(DefaultMaxTextLength)
 
   /**
-   * Buffer the body as a simple [[akka.util.ByteString]].
+   * Buffer the body as a simple [[org.apache.pekko.util.ByteString]].
    *
    * @param maxLength Max length (in bytes) allowed or returns EntityTooLarge HTTP response.
    */
@@ -608,7 +610,7 @@ trait PlayBodyParsers extends BodyParserUtils {
   }
 
   /**
-   * Buffer the body as a simple [[akka.util.ByteString]].
+   * Buffer the body as a simple [[org.apache.pekko.util.ByteString]].
    *
    * Will buffer up to the configured max memory buffer amount, after which point, it will return an EntityTooLarge
    * HTTP response.
@@ -942,19 +944,28 @@ trait PlayBodyParsers extends BodyParserUtils {
     contentType match {
       case Some("text/plain") =>
         logger.trace("Parsing AnyContent as text")
-        text(maxLengthOrDefault)(request).map(_.map(s => AnyContentAsText(s)))
+        text(maxLengthOrDefault)(request).map(
+          _.map(s => if (s == null || s.isEmpty) AnyContentAsEmpty else AnyContentAsText(s))
+        )
 
       case Some("text/xml") | Some("application/xml") | Some(ApplicationXmlMatcher()) =>
         logger.trace("Parsing AnyContent as xml")
-        xml(maxLengthOrDefault)(request).map(_.map(x => AnyContentAsXml(x)))
+        xml(maxLengthOrDefault)(request).map(
+          _.map(x => if (x == null || x.isEmpty) AnyContentAsEmpty else AnyContentAsXml(x))
+        )
 
       case Some("text/json") | Some("application/json") =>
         logger.trace("Parsing AnyContent as json")
-        json(maxLengthOrDefault)(request).map(_.map(j => AnyContentAsJson(j)))
+        json(maxLengthOrDefault)(request).map(
+          _.map(j => AnyContentAsJson(j) // Always available, there is no "empty", parsing fails early if no json sent
+          )
+        )
 
       case Some("application/x-www-form-urlencoded") =>
         logger.trace("Parsing AnyContent as urlFormEncoded")
-        formUrlEncoded(maxLengthOrDefault)(request).map(_.map(d => AnyContentAsFormUrlEncoded(d)))
+        formUrlEncoded(maxLengthOrDefault)(request).map(
+          _.map(d => if (d == null || d.isEmpty) AnyContentAsEmpty else AnyContentAsFormUrlEncoded(d))
+        )
 
       case Some("multipart/form-data") =>
         logger.trace("Parsing AnyContent as multipartFormData")
@@ -963,11 +974,15 @@ trait PlayBodyParsers extends BodyParserUtils {
           maxLengthOrDefaultLarge,
           DefaultAllowEmptyFileUploads
         ).apply(request)
-          .map(_.map(m => AnyContentAsMultipartFormData(m)))
+          .map(
+            _.map(m => if (m == null || m.isEmpty) AnyContentAsEmpty else AnyContentAsMultipartFormData(m))
+          )
 
       case _ =>
         logger.trace("Parsing AnyContent as raw")
-        raw(DefaultMaxTextLength, maxLengthOrDefaultLarge)(request).map(_.map(r => AnyContentAsRaw(r)))
+        raw(DefaultMaxTextLength, maxLengthOrDefaultLarge)(request).map(
+          _.map(r => if (r == null || r.size == 0) AnyContentAsEmpty else AnyContentAsRaw(r))
+        )
     }
   }
 
@@ -1158,15 +1173,18 @@ object BodyParsers {
       var pushedBytes: Long = 0
 
       val logic = new GraphStageLogic(shape) {
-        setHandler(out, new OutHandler {
-          override def onPull(): Unit = {
-            pull(in)
+        setHandler(
+          out,
+          new OutHandler {
+            override def onPull(): Unit = {
+              pull(in)
+            }
+            override def onDownstreamFinish(): Unit = {
+              status.success(MaxSizeNotExceeded)
+              completeStage()
+            }
           }
-          override def onDownstreamFinish(): Unit = {
-            status.success(MaxSizeNotExceeded)
-            completeStage()
-          }
-        })
+        )
         setHandler(
           in,
           new InHandler {

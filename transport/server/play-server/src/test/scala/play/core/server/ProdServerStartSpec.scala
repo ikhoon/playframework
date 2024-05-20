@@ -8,14 +8,8 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.charset.Charset
 import java.nio.file.Files
-import java.util.Properties
 import java.util.concurrent._
-
-import com.google.common.io.{ Files => GFiles }
-import org.specs2.mutable.Specification
-import play.api.Mode
-import play.api.Play
-import play.core.ApplicationProvider
+import java.util.Properties
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.Await
@@ -24,6 +18,11 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+
+import org.specs2.mutable.Specification
+import play.api.Mode
+import play.api.Play
+import play.core.ApplicationProvider
 
 case class ExitException(message: String, cause: Option[Throwable] = None, returnCode: Int = -1)
     extends Exception(s"Exit with $message, $returnCode", cause.orNull)
@@ -79,18 +78,18 @@ class FakeServer(context: ServerProvider.Context) extends Server with Reloadable
 }
 
 class FakeServerProvider extends ServerProvider {
-  override def createServer(context: ServerProvider.Context) = new FakeServer(context)
+  override def createServer(context: ServerProvider.Context): Server = new FakeServer(context)
 }
 
 class StartupErrorServerProvider extends ServerProvider {
-  override def createServer(context: ServerProvider.Context) = throw new Exception("server fails to start")
+  override def createServer(context: ServerProvider.Context): Server = throw new Exception("server fails to start")
 }
 
 class ProdServerStartSpec extends Specification {
   sequential
 
   def withTempDir[T](block: File => T) = {
-    val temp = GFiles.createTempDir()
+    val temp = Files.createTempDirectory("tmp").toFile
     try {
       block(temp)
     } finally {
@@ -202,10 +201,10 @@ class ProdServerStartSpec extends Specification {
       } must beLeft
     }
 
-    "exit with an error `akka.coordinated-shutdown.exit-jvm` is `on`" in withTempDir { tempDir =>
+    "exit with an error `pekko.coordinated-shutdown.exit-jvm` is `on`" in withTempDir { tempDir =>
       val process = new FakeServerProcess(
         args = Seq(tempDir.getAbsolutePath),
-        propertyMap = Map("akka.coordinated-shutdown.exit-jvm" -> "on"),
+        propertyMap = Map("pekko.coordinated-shutdown.exit-jvm" -> "on"),
         pid = Some("999")
       )
       exitResult {

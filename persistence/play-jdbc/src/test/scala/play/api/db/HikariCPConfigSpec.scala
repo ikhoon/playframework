@@ -4,18 +4,22 @@
 
 package play.api.db
 
+import scala.concurrent.duration._
+
 import com.zaxxer.hikari.HikariConfig
 import org.specs2.mutable.Specification
 import org.specs2.specification.Scope
 import play.api.Configuration
 
-import scala.concurrent.duration._
-
 class HikariCPConfigSpec extends Specification {
   "When reading configuration" should {
     "set dataSourceClassName when present" in new Configs {
       val config = from("hikaricp.dataSourceClassName" -> "org.postgresql.ds.PGPoolingDataSource")
-      new HikariCPConfig("foo", DatabaseConfig(None, None, None, None, None), config).toHikariConfig.getDataSourceClassName must beEqualTo(
+      new HikariCPConfig(
+        "foo",
+        DatabaseConfig(None, None, None, None, None),
+        config
+      ).toHikariConfig.getDataSourceClassName must beEqualTo(
         "org.postgresql.ds.PGPoolingDataSource"
       )
     }
@@ -53,6 +57,10 @@ class HikariCPConfigSpec extends Specification {
 
       "idleTimeout to 10 minutes" in new Configs {
         new HikariCPConfig("foo", dbConfig, reference).toHikariConfig.getIdleTimeout must beEqualTo(10.minutes.toMillis)
+      }
+
+      "keepaliveTime to 0" in new Configs {
+        new HikariCPConfig("foo", dbConfig, reference).toHikariConfig.getKeepaliveTime must beEqualTo(0L)
       }
 
       "maxLifetime to 30 minutes" in new Configs {
@@ -122,6 +130,11 @@ class HikariCPConfigSpec extends Specification {
         new HikariCPConfig("foo", dbConfig, config).toHikariConfig.getIdleTimeout must beEqualTo(5.minutes.toMillis)
       }
 
+      "keepaliveTime" in new Configs {
+        val config = from("hikaricp.keepaliveTime" -> "5 minutes")
+        new HikariCPConfig("foo", dbConfig, config).toHikariConfig.getKeepaliveTime must beEqualTo(5.minutes.toMillis)
+      }
+
       "maxLifetime" in new Configs {
         val config = from("hikaricp.maxLifetime" -> "15 minutes")
         new HikariCPConfig("foo", dbConfig, config).toHikariConfig.getMaxLifetime must beEqualTo(15.minutes.toMillis)
@@ -177,9 +190,20 @@ class HikariCPConfigSpec extends Specification {
         val config = from("hikaricp.leakDetectionThreshold" -> "3 seconds")
         new HikariCPConfig("foo", dbConfig, config).toHikariConfig.getLeakDetectionThreshold must beEqualTo(3000L)
       }
+
+      "exceptionOverrideClassName" in new Configs {
+        val className = classOf[MyTestExceptionOverride].getName
+
+        val config = from("hikaricp.exceptionOverrideClassName" -> className)
+        new HikariCPConfig("foo", dbConfig, config).toHikariConfig.getExceptionOverrideClassName must beEqualTo(
+          className
+        )
+      }
     }
   }
 }
+
+class MyTestExceptionOverride extends com.zaxxer.hikari.SQLExceptionOverride {}
 
 trait Configs extends Scope {
   val dbConfig: DatabaseConfig       = DatabaseConfig(Some("org.h2.Driver"), Some("jdbc:h2:mem:"), None, None, None)

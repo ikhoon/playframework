@@ -9,15 +9,15 @@ import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import play.api.http.HttpEntity
-
-import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.concurrent.Await
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
 import org.specs2.mutable.Specification
+import play.api.http.HttpEntity
 
 class ByteRangeSpec extends Specification {
   "Distance" in {
@@ -48,8 +48,8 @@ class RangeSpec extends Specification {
   def checkRange(entityLength: Long, header: String, expected: Range) = {
     val range = Range(Some(entityLength), header)
     range must beSome[Range]
-    range must beSome.which(_.getEntityLength == expected.getEntityLength)
-    range must beSome.which(_.byteRange == expected.byteRange)
+    range must beSome[Range].which(_.getEntityLength == expected.getEntityLength)
+    range must beSome[Range].which(_.byteRange == expected.byteRange)
   }
 
   "Satisfiable ranges" in {
@@ -159,19 +159,19 @@ class RangeSpec extends Specification {
   "Content length" in {
     "500-999 has content-length = 500" in {
       val range = Range(entityLength = Some(1000), range = "500-999")
-      range must beSome.which(_.length.contains(500))
+      range must beSome[Range].which(_.length.contains(500))
     }
     "0-499 has content-length = 500" in {
       val range = Range(entityLength = Some(1000), range = "0-499")
-      range must beSome.which(_.length.contains(500))
+      range must beSome[Range].which(_.length.contains(500))
     }
     "0-10 has content-length = 11" in {
       val range = Range(entityLength = Some(1000), range = "0-10")
-      range must beSome.which(_.length.contains(11))
+      range must beSome[Range].which(_.length.contains(11))
     }
     "with range 9500- and 10000 bytes available has content-length = 500" in {
       val range = Range(entityLength = Some(10000), range = "9500-")
-      range must beSome.which(_.length.contains(500))
+      range must beSome[Range].which(_.length.contains(500))
     }
   }
 
@@ -190,21 +190,21 @@ class RangeSpec extends Specification {
     "Invalid when" in {
       "last-byte-pos value less than its first-byte-pos" in {
         val range = Range(entityLength = Some(10000), range = "200-100")
-        range must beSome.which(_.isValid == false)
+        range must beSome[Range].which(_.isValid == false)
       }
       "first-byte-pos greater than entity length" in {
         val range = Range(entityLength = Some(1000), range = "2000-3000")
-        range must beSome.which(_.isValid == false)
+        range must beSome[Range].which(_.isValid == false)
       }
     }
     "Valid" in {
       "last-byte-pos is equal to first-byte-pos" in {
         val range = Range(entityLength = Some(10000), range = "100-100")
-        range must beSome.which(_.isValid == true)
+        range must beSome[Range].which(_.isValid == true)
       }
       "first-byte-pos is less than entity length" in {
         val range = Range(entityLength = Some(10000), range = "200-300")
-        range must beSome.which(_.isValid == true)
+        range must beSome[Range].which(_.isValid == true)
       }
     }
   }
@@ -213,25 +213,25 @@ class RangeSpec extends Specification {
     "Invalid when" in {
       "last-byte-pos value less than its first-byte-pos" in {
         val range = Range(entityLength = None, range = "200-100")
-        range must beSome.which(_.isValid == false)
+        range must beSome[Range].which(_.isValid == false)
       }
       "start value is not present" in {
         val range = Range(entityLength = None, range = "-3000")
-        range must beSome.which(_.isValid == false)
+        range must beSome[Range].which(_.isValid == false)
       }
       "end value is not present" in {
         val range = Range(entityLength = None, range = "3000-")
-        range must beSome.which(_.isValid == false)
+        range must beSome[Range].which(_.isValid == false)
       }
     }
     "Valid" in {
       "last-byte-pos is equal to first-byte-pos" in {
         val range = Range(entityLength = None, range = "100-100")
-        range must beSome.which(_.isValid == true)
+        range must beSome[Range].which(_.isValid == true)
       }
       "first-byte-pos is less than entity length" in {
         val range = Range(entityLength = None, range = "200-300")
-        range must beSome.which(_.isValid == true)
+        range must beSome[Range].which(_.isValid == true)
       }
     }
   }
@@ -398,7 +398,7 @@ class RangeResultSpec extends Specification {
 
     "support a Source function that handles pre-seeking" in {
       val bytes: List[Byte]                             = List[Byte](1, 2, 3, 4, 5, 6)
-      val source: Long => (Long, Source[ByteString, _]) = offsetSupportingGenerator(bytes)
+      val source: Long => (Long, Source[ByteString, ?]) = offsetSupportingGenerator(bytes)
       val Result(ResponseHeader(_, headers, _), HttpEntity.Streamed(data, _, _), _, _, _, _) =
         RangeResult.ofSource(Some(bytes.size.toLong), source, Some("bytes=3-4"), None, None)
       implicit val system: ActorSystem        = ActorSystem()
@@ -409,7 +409,7 @@ class RangeResultSpec extends Specification {
 
     "support a Source function that ignores pre-seeking" in {
       val bytes: List[Byte]                             = List[Byte](1, 2, 3, 4, 5, 6)
-      val source: Long => (Long, Source[ByteString, _]) = offsetIgnoringGenerator(bytes)
+      val source: Long => (Long, Source[ByteString, ?]) = offsetIgnoringGenerator(bytes)
       val Result(ResponseHeader(_, headers, _), HttpEntity.Streamed(data, _, _), _, _, _, _) =
         RangeResult.ofSource(Some(bytes.size.toLong), source, Some("bytes=3-4"), None, None)
       implicit val system: ActorSystem        = ActorSystem()
@@ -420,7 +420,7 @@ class RangeResultSpec extends Specification {
 
     "throw error when Source function pre-seeks too far" in {
       val bytes: List[Byte]                             = List[Byte](1, 2, 3, 4, 5, 6)
-      val source: Long => (Long, Source[ByteString, _]) = brokenOffsetGenerator(bytes)
+      val source: Long => (Long, Source[ByteString, ?]) = brokenOffsetGenerator(bytes)
       RangeResult.ofSource(Some(bytes.size.toLong), source, Some("bytes=3-4"), None, None) must
         throwAn[IllegalArgumentException](
           "Requested range starts at 3 but the getSource function returned " +
@@ -481,19 +481,19 @@ class RangeResultSpec extends Specification {
     }
   }
 
-  private def collectBytes(data: Source[ByteString, _])(implicit mat: Materializer): Array[Byte] =
+  private def collectBytes(data: Source[ByteString, ?])(implicit mat: Materializer): Array[Byte] =
     Await.result(data.runFold(ByteString.empty)(_ ++ _).map(_.toArray), Duration.Inf)
 
   /** Source-producing function that handles offset */
-  private def offsetSupportingGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, _]) =
+  private def offsetSupportingGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, ?]) =
     (offset, Source(data.map(ByteString(_))).drop(offset))
 
   /** Source-producing function that seeks beyond the start of the request offset (a bug). */
-  private def brokenOffsetGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, _]) =
+  private def brokenOffsetGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, ?]) =
     (offset + 1, Source(data.map(ByteString(_))).drop(offset + 1))
 
   /** Source-producing function that ignores offset and returns 0 (expecting RangeResult to handle seeking) */
-  private def offsetIgnoringGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, _]) =
+  private def offsetIgnoringGenerator(data: List[Byte])(offset: Long): (Long, Source[ByteString, ?]) =
     (0, Source(data.map(ByteString(_))))
 
   private def createFile(path: Path): File = {

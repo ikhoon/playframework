@@ -5,24 +5,26 @@
 package play.data
 
 import java.nio.file.Files
-import java.util
-import java.util.Date
-import java.util.Optional
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util
+import java.util.Date
+import java.util.Locale
+import java.util.Optional
 
-import javax.validation.Valid
-import javax.validation.Validation
-import javax.validation.ValidatorFactory
-import javax.validation.{ Configuration => vConfiguration }
-import javax.validation.groups.Default
+import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import jakarta.validation.{ Configuration => vConfiguration }
+import jakarta.validation.constraints.Size
+import jakarta.validation.groups.Default
+import jakarta.validation.Valid
+import jakarta.validation.Validation
+import jakarta.validation.ValidatorFactory
 import org.hibernate.validator.messageinterpolation.ParameterMessageInterpolator
 import org.specs2.mutable.Specification
-import play.ApplicationLoader
-import play.BuiltInComponentsFromContext
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.test.WithApplication
 import play.api.Application
@@ -30,23 +32,20 @@ import play.components.TemporaryFileComponents
 import play.data.validation.Constraints
 import play.data.validation.ValidationError
 import play.i18n.Lang
+import play.libs.typedmap.TypedMap
 import play.libs.F
 import play.libs.Files.TemporaryFile
 import play.libs.Files.TemporaryFileCreator
-import play.libs.typedmap.TypedMap
 import play.mvc.EssentialFilter
 import play.mvc.Http
+import play.mvc.Http.MultipartFormData.FilePart
 import play.mvc.Http.Request
 import play.mvc.Http.RequestBuilder
-import play.mvc.Http.MultipartFormData.FilePart
 import play.routing.Router
 import play.test.Helpers
 import play.twirl.api.Html
-
-import javax.validation.constraints.Size
-import scala.beans.BeanProperty
-import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
+import play.ApplicationLoader
+import play.BuiltInComponentsFromContext
 
 class RuntimeDependencyInjectionFormSpec extends FormSpec {
   private var app: Option[Application] = None
@@ -136,7 +135,7 @@ trait CommonFormSpec extends Specification {
 
   def createThesisTemporaryFiles()(implicit temporaryFileCreator: TemporaryFileCreator): Map[String, TemporaryFile] =
     Map(
-      "thesisDocFile"            -> createTemporaryFile("pdf", "by Lightbend founder Martin Odersky"),
+      "thesisDocFile"            -> createTemporaryFile("pdf", "by Microsoft founder Bill Gates"),
       "latexFile"                -> createTemporaryFile("tex", "the final draft"),
       "codesnippetsFile"         -> createTemporaryFile("scala", "some code snippets"),
       "bibliographyBrianGoetz"   -> createTemporaryFile("epub", "Java Concurrency in Practice"),
@@ -245,34 +244,40 @@ trait FormSpec extends CommonFormSpec {
       "allow to access the value of an invalid form prefixing fields with the root name" in new WithApplication(
         application()
       ) {
-        val req = FormSpec.dummyRequest(
-          Map(
-            "task.id"      -> Array("notAnInt"),
-            "task.name"    -> Array("peter"),
-            "task.done"    -> Array("true"),
-            "task.dueDate" -> Array("15/12/2009")
+        override def running() = {
+          val req = FormSpec.dummyRequest(
+            Map(
+              "task.id"      -> Array("notAnInt"),
+              "task.name"    -> Array("peter"),
+              "task.done"    -> Array("true"),
+              "task.dueDate" -> Array("15/12/2009")
+            )
           )
-        )
 
-        val myForm = formFactory.form("task", classOf[play.data.Task]).bindFromRequest(req)
+          val myForm = formFactory.form("task", classOf[play.data.Task]).bindFromRequest(req)
 
-        myForm.hasErrors() must beEqualTo(true)
-        myForm.field("task.name").value.toScala must beSome("peter")
+          myForm.hasErrors() must beEqualTo(true)
+          myForm.field("task.name").value.toScala must beSome("peter")
+        }
       }
       "have an error due to missing required value" in new WithApplication(application()) {
-        val req = FormSpec.dummyRequest(Map("task.id" -> Array("1234567891x"), "task.name" -> Array("peter")))
+        override def running() = {
+          val req = FormSpec.dummyRequest(Map("task.id" -> Array("1234567891x"), "task.name" -> Array("peter")))
 
-        val myForm = formFactory.form("task", classOf[play.data.Task]).bindFromRequest(req)
-        myForm.hasErrors() must beEqualTo(true)
-        myForm.errors("task.dueDate").get(0).messages().asScala must contain("error.required")
+          val myForm = formFactory.form("task", classOf[play.data.Task]).bindFromRequest(req)
+          myForm.hasErrors() must beEqualTo(true)
+          myForm.errors("task.dueDate").get(0).messages().asScala must contain("error.required")
+        }
       }
       "have an error due to missing required value with direct field access" in new WithApplication(application()) {
-        val req = FormSpec.dummyRequest(Map("task.id" -> Array("1234567891x"), "task.name" -> Array("peter")))
+        override def running() = {
+          val req = FormSpec.dummyRequest(Map("task.id" -> Array("1234567891x"), "task.name" -> Array("peter")))
 
-        val myForm =
-          formFactory.form("task", classOf[play.data.Subtask]).withDirectFieldAccess(true).bindFromRequest(req)
-        myForm.hasErrors() must beEqualTo(true)
-        myForm.errors("task.dueDate").get(0).messages().asScala must contain("error.required")
+          val myForm =
+            formFactory.form("task", classOf[play.data.Subtask]).withDirectFieldAccess(true).bindFromRequest(req)
+          myForm.hasErrors() must beEqualTo(true)
+          myForm.errors("task.dueDate").get(0).messages().asScala must contain("error.required")
+        }
       }
     }
     "be valid with all fields" in {
@@ -325,17 +330,19 @@ trait FormSpec extends CommonFormSpec {
     "be valid with all fields with direct field access switched on in config" in new WithApplication(
       application("play.forms.binding.directFieldAccess" -> "true")
     ) {
-      val req = FormSpec.dummyRequest(
-        Map(
-          "id"      -> Array("1234567891"),
-          "name"    -> Array("peter"),
-          "dueDate" -> Array("15/12/2009"),
-          "endDate" -> Array("2008-11-21")
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map(
+            "id"      -> Array("1234567891"),
+            "name"    -> Array("peter"),
+            "dueDate" -> Array("15/12/2009"),
+            "endDate" -> Array("2008-11-21")
+          )
         )
-      )
 
-      val myForm = formFactory.form(classOf[play.data.Subtask]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(false)
+        val myForm = formFactory.form(classOf[play.data.Subtask]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(false)
+      }
     }
     "be valid with mandatory params passed" in {
       val req = FormSpec.dummyRequest(
@@ -444,116 +451,131 @@ trait FormSpec extends CommonFormSpec {
     }
 
     "have an error due to badly formatted date" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(
-        Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
-      )
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
+        )
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("dueDate").get(0).messages().size() must beEqualTo(2)
-      myForm.errors("dueDate").get(0).messages().get(1) must beEqualTo("error.invalid.java.util.Date")
-      myForm.errors("dueDate").get(0).messages().get(0) must beEqualTo("error.invalid")
-      myForm.errors("dueDate").get(0).message() must beEqualTo("error.invalid.java.util.Date")
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("dueDate").get(0).messages().size() must beEqualTo(2)
+        myForm.errors("dueDate").get(0).messages().get(1) must beEqualTo("error.invalid.java.util.Date")
+        myForm.errors("dueDate").get(0).messages().get(0) must beEqualTo("error.invalid")
+        myForm.errors("dueDate").get(0).message() must beEqualTo("error.invalid.java.util.Date")
 
-      // make sure we can access the values of an invalid form
-      myForm.value().get().getId() must beEqualTo(1234567891)
-      myForm.value().get().getName() must beEqualTo("peter")
+        // make sure we can access the values of an invalid form
+        myForm.value().get().getId() must beEqualTo(1234567891)
+        myForm.value().get().getName() must beEqualTo("peter")
+      }
     }
     "throws an exception when trying to access value of invalid form via get()" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(
-        Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
-      )
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
+        )
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.get must throwAn[IllegalStateException]
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.get must throwAn[IllegalStateException]
+      }
     }
     "allow to access the value of an invalid form even when not even one valid value was supplied" in new WithApplication(
       application()
     ) {
-      val req = FormSpec.dummyRequest(Map("id" -> Array("notAnInt"), "dueDate" -> Array("2009/11e/11")))
+      override def running() = {
+        val req = FormSpec.dummyRequest(Map("id" -> Array("notAnInt"), "dueDate" -> Array("2009/11e/11")))
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.value().get().getId() must_== null
-      myForm.value().get().getName() must_== null
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.value().get().getId() must_== null
+        myForm.value().get().getName() must_== null
+      }
     }
     "have an error due to badly formatted date after using withTransientLang" in new WithApplication(
       application("play.i18n.langs" -> Seq("en", "en-US", "fr"))
     ) {
-      val req = FormSpec.dummyRequest(
-        Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
-      )
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11"))
+        )
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req.withTransientLang(Lang.forCode("fr")))
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("dueDate").get(0).messages().size() must beEqualTo(3)
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(2) must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(1) must beEqualTo("error.invalid.java.util.Date") // is defined in play's default messages file
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(0) must beEqualTo("error.invalid") // is defined in play's default messages file
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .message() must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+        val myForm =
+          formFactory.form(classOf[play.data.Task]).bindFromRequest(req.withTransientLang(Lang.forCode("fr")))
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("dueDate").get(0).messages().size() must beEqualTo(3)
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(2) must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(1) must beEqualTo("error.invalid.java.util.Date") // is defined in play's default messages file
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(0) must beEqualTo("error.invalid") // is defined in play's default messages file
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .message() must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+      }
     }
     "have an error due to badly formatted date when using lang cookie" in new WithApplication(
       application("play.i18n.langs" -> Seq("en", "en-US", "fr"))
     ) {
-      val req = new RequestBuilder()
-        .method("POST")
-        .uri("http://localhost/test")
-        .bodyFormArrayValues(
-          Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11")).asJava
-        )
-        .langCookie(Lang.forCode("fr"), Helpers.stubMessagesApi())
-        .build()
+      override def running() = {
+        val req = new RequestBuilder()
+          .method("POST")
+          .uri("http://localhost/test")
+          .bodyFormArrayValues(
+            Map("id" -> Array("1234567891"), "name" -> Array("peter"), "dueDate" -> Array("2009/11e/11")).asJava
+          )
+          .langCookie(Lang.forCode("fr"), Helpers.stubMessagesApi())
+          .build()
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("dueDate").get(0).messages().size() must beEqualTo(3)
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(2) must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(1) must beEqualTo("error.invalid.java.util.Date") // is defined in play's default messages file
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .messages()
-        .get(0) must beEqualTo("error.invalid") // is defined in play's default messages file
-      myForm
-        .errors("dueDate")
-        .get(0)
-        .message() must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("dueDate").get(0).messages().size() must beEqualTo(3)
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(2) must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(1) must beEqualTo("error.invalid.java.util.Date") // is defined in play's default messages file
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .messages()
+          .get(0) must beEqualTo("error.invalid") // is defined in play's default messages file
+        myForm
+          .errors("dueDate")
+          .get(0)
+          .message() must beEqualTo("error.invalid.dueDate") // is ONLY defined in messages.fr
+      }
     }
     "have an error due to missing required value" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(Map("id" -> Array("1234567891x"), "name" -> Array("peter")))
+      override def running() = {
+        val req = FormSpec.dummyRequest(Map("id" -> Array("1234567891x"), "name" -> Array("peter")))
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("dueDate").get(0).messages().asScala must contain("error.required")
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("dueDate").get(0).messages().asScala must contain("error.required")
+      }
     }
     "have an error due to missing required value with direct field access" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(Map("id" -> Array("1234567891x"), "name" -> Array("peter")))
+      override def running() = {
+        val req = FormSpec.dummyRequest(Map("id" -> Array("1234567891x"), "name" -> Array("peter")))
 
-      val myForm = formFactory.form(classOf[play.data.Subtask]).withDirectFieldAccess(true).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("dueDate").get(0).messages().asScala must contain("error.required")
+        val myForm = formFactory.form(classOf[play.data.Subtask]).withDirectFieldAccess(true).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("dueDate").get(0).messages().asScala must contain("error.required")
+      }
     }
     "be invalid when only fields (and no getters) exist but direct field access is disabled" in {
       val req = FormSpec.dummyRequest(Map("id" -> Array("1234567891x"), "name" -> Array("peter")))
@@ -566,28 +588,32 @@ trait FormSpec extends CommonFormSpec {
       }
     }
     "have an error due to bad value in Id field" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(
-        Map("id" -> Array("1234567891x"), "name" -> Array("peter"), "dueDate" -> Array("12/12/2009"))
-      )
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map("id" -> Array("1234567891x"), "name" -> Array("peter"), "dueDate" -> Array("12/12/2009"))
+        )
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("id").get(0).messages().asScala must contain("error.invalid")
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("id").get(0).messages().asScala must contain("error.invalid")
+      }
     }
 
     "have an error due to badly formatted date for default date binder" in new WithApplication(application()) {
-      val req = FormSpec.dummyRequest(
-        Map(
-          "id"      -> Array("1234567891"),
-          "name"    -> Array("peter"),
-          "dueDate" -> Array("15/12/2009"),
-          "endDate" -> Array("2008-11e-21")
+      override def running() = {
+        val req = FormSpec.dummyRequest(
+          Map(
+            "id"      -> Array("1234567891"),
+            "name"    -> Array("peter"),
+            "dueDate" -> Array("15/12/2009"),
+            "endDate" -> Array("2008-11e-21")
+          )
         )
-      )
 
-      val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
-      myForm.hasErrors() must beEqualTo(true)
-      myForm.errors("endDate").get(0).messages().asScala must contain("error.invalid.java.util.Date")
+        val myForm = formFactory.form(classOf[play.data.Task]).bindFromRequest(req)
+        myForm.hasErrors() must beEqualTo(true)
+        myForm.errors("endDate").get(0).messages().asScala must contain("error.invalid.java.util.Date")
+      }
     }
 
     "support repeated values for Java binding" in {
@@ -649,11 +675,11 @@ trait FormSpec extends CommonFormSpec {
             Map(
               "entry.name"                 -> Array("Bill"),
               "entry.value"                -> Array("3"),
-              "entries[].name"             -> Array("Calvin", "John", "Edward"), //   -> entries[0|1|2].name
-              "entries[].value"            -> Array("14", "26", "76"), //             -> entries[0|1|2].value
-              "entries[].entries[].name"   -> Array("Robin Hood", "Donald Duck"), //  -> entries[0].entries[0|1].name
+              "entries[].name"             -> Array("Calvin", "John", "Edward"),   // -> entries[0|1|2].name
+              "entries[].value"            -> Array("14", "26", "76"),             // -> entries[0|1|2].value
+              "entries[].entries[].name"   -> Array("Robin Hood", "Donald Duck"),  // -> entries[0].entries[0|1].name
               "entries[].entries[].street" -> Array("Wall Street", "Main Street"), // -> entries[0].entries[0|1].street
-              "entries[].entries[].value"  -> Array("143", "196"), //                 -> entries[0].entries[0|1].value
+              "entries[].entries[].value"  -> Array("143", "196"),                 // -> entries[0].entries[0|1].value
               "entries[].entries[].notes[]" -> Array(
                 "Note 1",
                 "Note 2",
@@ -785,158 +811,162 @@ trait FormSpec extends CommonFormSpec {
 
     "bind files" should {
       "be valid with all fields" in new WithApplication(application()) {
-        implicit val temporaryFileCreator = tempFileCreator
+        override def running() = {
+          implicit val temporaryFileCreator: TemporaryFileCreator = tempFileCreator
 
-        val files = createThesisTemporaryFiles()
+          val files = createThesisTemporaryFiles()
 
-        try {
-          val req = createThesisRequestWithFileParts(files)
+          try {
+            val req = createThesisRequestWithFileParts(files)
 
-          val myForm = formFactory.form(classOf[play.data.Thesis]).bindFromRequest(req)
+            val myForm = formFactory.form(classOf[play.data.Thesis]).bindFromRequest(req)
 
-          myForm.hasErrors() must beEqualTo(false)
-          myForm.hasGlobalErrors() must beEqualTo(false)
+            myForm.hasErrors() must beEqualTo(false)
+            myForm.hasGlobalErrors() must beEqualTo(false)
 
-          myForm.rawData().size() must beEqualTo(3)
-          myForm.files().size() must beEqualTo(10)
+            myForm.rawData().size() must beEqualTo(3)
+            myForm.files().size() must beEqualTo(10)
 
-          val thesis = myForm.get
+            val thesis = myForm.get
 
-          thesis.getTitle must beEqualTo("How Scala works")
-          myForm.field("title").value().toScala must beSome("How Scala works")
-          myForm.field("title").file().toScala must beNone
+            thesis.getTitle must beEqualTo("How Scala works")
+            myForm.field("title").value().toScala must beSome("How Scala works")
+            myForm.field("title").file().toScala must beNone
 
-          thesis.getLetters().size() must beEqualTo(2)
-          myForm.field("letters").indexes() must beEqualTo(List(0, 1).asJava)
+            thesis.getLetters().size() must beEqualTo(2)
+            myForm.field("letters").indexes() must beEqualTo(List(0, 1).asJava)
 
-          thesis.getLetters().get(0).getAddress must beEqualTo("Vienna")
-          myForm.field("letters[0].address").value().toScala must beSome("Vienna")
-          myForm.field("letters[0].address").file().toScala must beNone
-          thesis.getLetters().get(1).getAddress must beEqualTo("Berlin")
-          myForm.field("letters[1].address").value().toScala must beSome("Berlin")
-          myForm.field("letters[1].address").file().toScala must beNone
+            thesis.getLetters().get(0).getAddress must beEqualTo("Vienna")
+            myForm.field("letters[0].address").value().toScala must beSome("Vienna")
+            myForm.field("letters[0].address").file().toScala must beNone
+            thesis.getLetters().get(1).getAddress must beEqualTo("Berlin")
+            myForm.field("letters[1].address").value().toScala must beSome("Berlin")
+            myForm.field("letters[1].address").file().toScala must beNone
 
-          checkFileParts(
-            Seq(thesis.getLetters().get(0).getCoverPage, myForm.field("letters[0].coverPage").file().get()),
-            "letters[].coverPage",
-            "text/plain",
-            "first-letter-cover_page.txt",
-            "First Letter Cover Page"
-          )
-          myForm.field("letters[0].coverPage").value().toScala must beNone
+            checkFileParts(
+              Seq(thesis.getLetters().get(0).getCoverPage, myForm.field("letters[0].coverPage").file().get()),
+              "letters[].coverPage",
+              "text/plain",
+              "first-letter-cover_page.txt",
+              "First Letter Cover Page"
+            )
+            myForm.field("letters[0].coverPage").value().toScala must beNone
 
-          checkFileParts(
-            Seq(thesis.getLetters().get(1).getCoverPage, myForm.field("letters[1].coverPage").file().get()),
-            "letters[].coverPage",
-            "application/vnd.oasis.opendocument.text",
-            "second-letter-cover_page.odt",
-            "Second Letter Cover Page"
-          )
-          myForm.field("letters[1].coverPage").value().toScala must beNone
+            checkFileParts(
+              Seq(thesis.getLetters().get(1).getCoverPage, myForm.field("letters[1].coverPage").file().get()),
+              "letters[].coverPage",
+              "application/vnd.oasis.opendocument.text",
+              "second-letter-cover_page.odt",
+              "Second Letter Cover Page"
+            )
+            myForm.field("letters[1].coverPage").value().toScala must beNone
 
-          thesis.getLetters().get(0).getLetterPages().size() must beEqualTo(2)
-          myForm.field("letters[0].letterPages").indexes() must beEqualTo(List(0, 1).asJava)
-          checkFileParts(
-            Seq(
-              thesis.getLetters().get(0).getLetterPages().get(0),
-              myForm.field("letters[0].letterPages[0]").file().get()
-            ),
-            "letters[].letterPages[]",
-            "application/msword",
-            "first-letter-page_1.doc",
-            "First Letter Page One"
-          )
-          myForm.field("letters[0].letterPages[0]").value().toScala must beNone
+            thesis.getLetters().get(0).getLetterPages().size() must beEqualTo(2)
+            myForm.field("letters[0].letterPages").indexes() must beEqualTo(List(0, 1).asJava)
+            checkFileParts(
+              Seq(
+                thesis.getLetters().get(0).getLetterPages().get(0),
+                myForm.field("letters[0].letterPages[0]").file().get()
+              ),
+              "letters[].letterPages[]",
+              "application/msword",
+              "first-letter-page_1.doc",
+              "First Letter Page One"
+            )
+            myForm.field("letters[0].letterPages[0]").value().toScala must beNone
 
-          checkFileParts(
-            Seq(
-              thesis.getLetters().get(0).getLetterPages().get(1),
-              myForm.field("letters[0].letterPages[1]").file().get()
-            ),
-            "letters[].letterPages[]",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "first-letter-page_2.docx",
-            "First Letter Page Two"
-          )
-          myForm.field("letters[0].letterPages[1]").value().toScala must beNone
+            checkFileParts(
+              Seq(
+                thesis.getLetters().get(0).getLetterPages().get(1),
+                myForm.field("letters[0].letterPages[1]").file().get()
+              ),
+              "letters[].letterPages[]",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "first-letter-page_2.docx",
+              "First Letter Page Two"
+            )
+            myForm.field("letters[0].letterPages[1]").value().toScala must beNone
 
-          thesis.getLetters().get(1).getLetterPages().size() must beEqualTo(1)
-          myForm.field("letters[1].letterPages").indexes() must beEqualTo(List(0).asJava)
-          checkFileParts(
-            Seq(
-              thesis.getLetters().get(1).getLetterPages().get(0),
-              myForm.field("letters[1].letterPages[0]").file().get()
-            ),
-            "letters[1].letterPages[]",
-            "application/rtf",
-            "second-letter-page_1.rtf",
-            "Second Letter Page One"
-          )
-          myForm.field("letters[1].letterPages[0]").value().toScala must beNone
+            thesis.getLetters().get(1).getLetterPages().size() must beEqualTo(1)
+            myForm.field("letters[1].letterPages").indexes() must beEqualTo(List(0).asJava)
+            checkFileParts(
+              Seq(
+                thesis.getLetters().get(1).getLetterPages().get(0),
+                myForm.field("letters[1].letterPages[0]").file().get()
+              ),
+              "letters[1].letterPages[]",
+              "application/rtf",
+              "second-letter-page_1.rtf",
+              "Second Letter Page One"
+            )
+            myForm.field("letters[1].letterPages[0]").value().toScala must beNone
 
-          checkFileParts(
-            Seq(thesis.getDocument, myForm.field("document").file().get()),
-            "document",
-            "application/pdf",
-            "best_thesis.pdf",
-            "by Lightbend founder Martin Odersky"
-          )
-          myForm.field("document").value().toScala must beNone
+            checkFileParts(
+              Seq(thesis.getDocument, myForm.field("document").file().get()),
+              "document",
+              "application/pdf",
+              "best_thesis.pdf",
+              "by Microsoft founder Bill Gates"
+            )
+            myForm.field("document").value().toScala must beNone
 
-          thesis.getAttachments().size() must beEqualTo(2)
-          myForm.field("attachments").indexes() must beEqualTo(List(0, 1).asJava)
-          checkFileParts(
-            Seq(thesis.getAttachments().get(0), myForm.field("attachments[0]").file().get()),
-            "attachments[]",
-            "application/x-tex",
-            "final_draft.tex",
-            "the final draft"
-          )
-          myForm.field("attachments[0]").value().toScala must beNone
-          checkFileParts(
-            Seq(thesis.getAttachments().get(1), myForm.field("attachments[1]").file().get()),
-            "attachments[]",
-            "text/x-scala-source",
-            "examples.scala",
-            "some code snippets"
-          )
-          myForm.field("attachments[1]").value().toScala must beNone
+            thesis.getAttachments().size() must beEqualTo(2)
+            myForm.field("attachments").indexes() must beEqualTo(List(0, 1).asJava)
+            checkFileParts(
+              Seq(thesis.getAttachments().get(0), myForm.field("attachments[0]").file().get()),
+              "attachments[]",
+              "application/x-tex",
+              "final_draft.tex",
+              "the final draft"
+            )
+            myForm.field("attachments[0]").value().toScala must beNone
+            checkFileParts(
+              Seq(thesis.getAttachments().get(1), myForm.field("attachments[1]").file().get()),
+              "attachments[]",
+              "text/x-scala-source",
+              "examples.scala",
+              "some code snippets"
+            )
+            myForm.field("attachments[1]").value().toScala must beNone
 
-          thesis.getBibliography().size() must beEqualTo(2)
-          myForm.field("bibliography").indexes() must beEqualTo(List(0, 1).asJava)
-          checkFileParts(
-            Seq(thesis.getBibliography().get(0), myForm.field("bibliography[0]").file().get()),
-            "bibliography[0]",
-            "application/epub+zip",
-            "Java_Concurrency_in_Practice.epub",
-            "Java Concurrency in Practice"
-          )
-          myForm.field("bibliography[0]").value().toScala must beNone
-          checkFileParts(
-            Seq(thesis.getBibliography().get(1), myForm.field("bibliography[1]").file().get()),
-            "bibliography[1]",
-            "application/x-mobipocket-ebook",
-            "The-Java-Programming-Language.mobi",
-            "The Java Programming Language"
-          )
-          myForm.field("bibliography[1]").value().toScala must beNone
-        } finally {
-          files.values.foreach(temporaryFileCreator.delete(_))
+            thesis.getBibliography().size() must beEqualTo(2)
+            myForm.field("bibliography").indexes() must beEqualTo(List(0, 1).asJava)
+            checkFileParts(
+              Seq(thesis.getBibliography().get(0), myForm.field("bibliography[0]").file().get()),
+              "bibliography[0]",
+              "application/epub+zip",
+              "Java_Concurrency_in_Practice.epub",
+              "Java Concurrency in Practice"
+            )
+            myForm.field("bibliography[0]").value().toScala must beNone
+            checkFileParts(
+              Seq(thesis.getBibliography().get(1), myForm.field("bibliography[1]").file().get()),
+              "bibliography[1]",
+              "application/x-mobipocket-ebook",
+              "The-Java-Programming-Language.mobi",
+              "The Java Programming Language"
+            )
+            myForm.field("bibliography[1]").value().toScala must beNone
+          } finally {
+            files.values.foreach(temporaryFileCreator.delete(_))
+          }
         }
       }
 
       "have an error due to missing required file" in new WithApplication(application()) {
-        val myForm = formFactory
-          .form(classOf[play.data.Thesis])
-          .bindFromRequest(FormSpec.dummyMultipartRequest(Map("title" -> Array("How Scala works"))))
-        myForm.hasErrors() must beEqualTo(true)
-        myForm.hasGlobalErrors() must beEqualTo(false)
-        myForm.errors().size() must beEqualTo(4)
-        myForm.files().size() must beEqualTo(0)
-        myForm.error("document").get.message() must beEqualTo("error.required")
-        myForm.error("attachments").get.message() must beEqualTo("error.required")
-        myForm.error("bibliography").get.message() must beEqualTo("error.required")
-        myForm.error("letters").get.message() must beEqualTo("error.required")
+        override def running() = {
+          val myForm = formFactory
+            .form(classOf[play.data.Thesis])
+            .bindFromRequest(FormSpec.dummyMultipartRequest(Map("title" -> Array("How Scala works"))))
+          myForm.hasErrors() must beEqualTo(true)
+          myForm.hasGlobalErrors() must beEqualTo(false)
+          myForm.errors().size() must beEqualTo(4)
+          myForm.files().size() must beEqualTo(0)
+          myForm.error("document").get.message() must beEqualTo("error.required")
+          myForm.error("attachments").get.message() must beEqualTo("error.required")
+          myForm.error("bibliography").get.message() must beEqualTo("error.required")
+          myForm.error("letters").get.message() must beEqualTo("error.required")
+        }
       }
     }
 
@@ -1094,7 +1124,7 @@ trait FormSpec extends CommonFormSpec {
 
       import play.core.j.PlayFormsMagicForJava._
 
-      def render(form: Form[_], min: Int = 1) =
+      def render(form: Form[?], min: Int = 1) =
         views.html.helper.repeat
           .apply(form("foo"), min) { f =>
             val a = f("a")
@@ -1152,7 +1182,7 @@ trait FormSpec extends CommonFormSpec {
 
       import play.core.j.PlayFormsMagicForJava._
 
-      def render(form: Form[_], min: Int = 1) =
+      def render(form: Form[?], min: Int = 1) =
         views.html.helper.repeatWithIndex
           .apply(form("foo"), min) { (f, i) =>
             val a = f("a")
@@ -1224,7 +1254,7 @@ trait FormSpec extends CommonFormSpec {
         "someFileField[92].member8"     -> null,
         "someFileField[96].member9[98]" -> null,
         "someFileField[96].member9[99]" -> null,
-      ).asJava.asInstanceOf[util.Map[String, Http.MultipartFormData.FilePart[_]]]
+      ).asJava.asInstanceOf[util.Map[String, Http.MultipartFormData.FilePart[?]]]
 
       val form: Form[Object] =
         new Form(null, null, dataPart, filePart, null, Optional.empty[Object](), null, null, null, null, null, null)
@@ -1268,7 +1298,7 @@ trait FormSpec extends CommonFormSpec {
     }
 
     "return the appropriate constraints for the desired validation group(s)" in {
-      "when NOT supplying a group all constraints that have the javax.validation.groups.Default group should be returned" in {
+      "when NOT supplying a group all constraints that have the jakarta.validation.groups.Default group should be returned" in {
         // (When a constraint annotation doesn't define a "groups" attribute, it's default group will be Default.class by default)
         val myForm = formFactory.form(classOf[SomeUser])
         myForm.field("email").constraints().size() must beEqualTo(2)
@@ -1289,7 +1319,7 @@ trait FormSpec extends CommonFormSpec {
         myForm.field("repeatPassword").constraints().get(1)._1 must beEqualTo("constraint.maxLength")
       }
 
-      "when NOT supplying the Default.class group all constraints that have the javax.validation.groups.Default group should be returned" in {
+      "when NOT supplying the Default.class group all constraints that have the jakarta.validation.groups.Default group should be returned" in {
         // The exact same tests again, but now we explicitly supply the Default.class group
         val myForm = formFactory.form(classOf[SomeUser], classOf[Default])
         myForm.field("email").constraints().size() must beEqualTo(2)
@@ -1497,47 +1527,51 @@ trait FormSpec extends CommonFormSpec {
         myForm.errors("entry").asScala.map(_.message()) must contain("error.required")
         myForm.errors("entry").asScala.map(_.message()) must contain("validate of parent: I always get called!")
       }
-      "when it is located in a subform (and sub-subform) and returns an error it should automatically prefix the error key with the parent form field" in {
-        val myForm = formFactory
-          .form(classOf[JavaMainForm])
-          .bind(
-            Lang.defaultLang(),
-            TypedMap.empty(),
-            Map(
-              "entry.name" -> "Bill",
-              //"entry.value" -> "...",  -> Missing but required by validate method of sub form
-              //"entries[0].name"  -> "...", -> Missing but required by @Constraints.Required
-              "entries[0].value" -> "14",
-              "entries[1].name"  -> "John",
-              //"entries[1].value" -> "...",  -> Missing but required by validate method of sub form
-              "entries[0].entries[0].name"   -> "Robin Hood",
-              "entries[0].entries[1].street" -> "Wall Street",
-            ).asJava
+      "when it is located in a subform (and sub-subform) and returns an error it should automatically prefix the error key with the parent form field" in new WithApplication(
+        application("play.i18n.langs" -> Seq("en"))
+      ) {
+        override def running() = {
+          val myForm = formFactory
+            .form(classOf[JavaMainForm])
+            .bind(
+              Lang.defaultLang(),
+              TypedMap.empty(),
+              Map(
+                "entry.name" -> "Bill",
+                // "entry.value" -> "...",  -> Missing but required by validate method of sub form
+                // "entries[0].name"  -> "...", -> Missing but required by @Constraints.Required
+                "entries[0].value" -> "14",
+                "entries[1].name"  -> "John",
+                // "entries[1].value" -> "...",  -> Missing but required by validate method of sub form
+                "entries[0].entries[0].name"   -> "Robin Hood",
+                "entries[0].entries[1].street" -> "Wall Street",
+              ).asJava
+            )
+          myForm.globalErrors().size() must beEqualTo(0)
+          myForm.errors().size() must beEqualTo(9)
+          myForm.errors("entry").size() must beEqualTo(1)
+          myForm.errors("entry").get(0).message() must beEqualTo("validate of parent: I always get called!")
+          myForm.errors("entry.value").size() must beEqualTo(1) // prefixed by Play
+          myForm.errors("entry.value").get(0).message() must beEqualTo("validate of child: value can't be null!")
+          myForm.errors("entries").size() must beEqualTo(1)
+          myForm.errors("entries").get(0).message() must beEqualTo("size must be between 0 and 1")
+          myForm.errors("entries[0].name").size() must beEqualTo(1)
+          myForm.errors("entries[0].name").get(0).message() must beEqualTo("error.required")
+          myForm.errors("entries[1].value").size() must beEqualTo(1) // prefixed by Play
+          myForm.errors("entries[1].value").get(0).message() must beEqualTo("validate of child: value can't be null!")
+          myForm.errors("entries[0].entries[0].value").size() must beEqualTo(1) // prefixed by Play
+          myForm.errors("entries[0].entries[0].value").get(0).message() must beEqualTo(
+            "validate of child of child: value can't be null!"
           )
-        myForm.globalErrors().size() must beEqualTo(0)
-        myForm.errors().size() must beEqualTo(9)
-        myForm.errors("entry").size() must beEqualTo(1)
-        myForm.errors("entry").get(0).message() must beEqualTo("validate of parent: I always get called!")
-        myForm.errors("entry.value").size() must beEqualTo(1) // prefixed by Play
-        myForm.errors("entry.value").get(0).message() must beEqualTo("validate of child: value can't be null!")
-        myForm.errors("entries").size() must beEqualTo(1)
-        myForm.errors("entries").get(0).message() must beEqualTo("size must be between 0 and 1")
-        myForm.errors("entries[0].name").size() must beEqualTo(1)
-        myForm.errors("entries[0].name").get(0).message() must beEqualTo("error.required")
-        myForm.errors("entries[1].value").size() must beEqualTo(1) // prefixed by Play
-        myForm.errors("entries[1].value").get(0).message() must beEqualTo("validate of child: value can't be null!")
-        myForm.errors("entries[0].entries[0].value").size() must beEqualTo(1) // prefixed by Play
-        myForm.errors("entries[0].entries[0].value").get(0).message() must beEqualTo(
-          "validate of child of child: value can't be null!"
-        )
-        myForm.errors("entries[0].entries[0].street").size() must beEqualTo(1)
-        myForm.errors("entries[0].entries[0].street").get(0).message() must beEqualTo("error.required")
-        myForm.errors("entries[0].entries[1].name").size() must beEqualTo(1)
-        myForm.errors("entries[0].entries[1].name").get(0).message() must beEqualTo("error.required")
-        myForm.errors("entries[0].entries[1].value").size() must beEqualTo(1) // prefixed by Play
-        myForm.errors("entries[0].entries[1].value").get(0).message() must beEqualTo(
-          "validate of child of child: value can't be null!"
-        )
+          myForm.errors("entries[0].entries[0].street").size() must beEqualTo(1)
+          myForm.errors("entries[0].entries[0].street").get(0).message() must beEqualTo("error.required")
+          myForm.errors("entries[0].entries[1].name").size() must beEqualTo(1)
+          myForm.errors("entries[0].entries[1].name").get(0).message() must beEqualTo("error.required")
+          myForm.errors("entries[0].entries[1].value").size() must beEqualTo(1) // prefixed by Play
+          myForm.errors("entries[0].entries[1].value").get(0).message() must beEqualTo(
+            "validate of child of child: value can't be null!"
+          )
+        }
       }
       "when it is located in a form that is sometimes used as sub form but not now and returns an error it should NOT automatically prefix the error key" in {
         val myForm = formFactory
@@ -1592,6 +1626,31 @@ trait FormSpec extends CommonFormSpec {
         myForm.field("password").constraints().get(5)._1 must beEqualTo("constraint.email")
       }
     }
+
+    "have the validator translate error messages correctly" in new WithApplication(
+      application("play.i18n.langs" -> List("de", "en", "ja"))
+    ) {
+      override def running() = {
+        val myFormJa = formFactory
+          .form(classOf[JavaI18NValidatorForm])
+          .bind(new Lang(Locale.JAPANESE), TypedMap.empty(), Map("note" -> "foo").asJava)
+        myFormJa.errors("note").get(0).message() must beEqualTo("10 から 100 の間のサイズにしてください")
+        val myFormEn = formFactory
+          .form(classOf[JavaI18NValidatorForm])
+          .bind(new Lang(Locale.ENGLISH), TypedMap.empty(), Map("note" -> "foo").asJava)
+        myFormEn.errors("note").get(0).message() must beEqualTo("size must be between 10 and 100")
+        val myFormDe = formFactory
+          .form(classOf[JavaI18NValidatorForm])
+          .bind(new Lang(Locale.GERMAN), TypedMap.empty(), Map("note" -> "foo").asJava)
+        myFormDe.errors("note").get(0).message() must beEqualTo("Größe muss zwischen 10 und 100 sein")
+
+        // French not defined in config, fall back to default (which is german, since it is first in the list)
+        val myFormFr = formFactory
+          .form(classOf[JavaI18NValidatorForm])
+          .bind(new Lang(Locale.FRENCH), TypedMap.empty(), Map("note" -> "foo").asJava)
+        myFormFr.errors("note").get(0).message() must beEqualTo("Größe muss zwischen 10 und 100 sein")
+      }
+    }
   }
 }
 
@@ -1606,7 +1665,7 @@ object FormSpec {
 
   def dummyMultipartRequest(
       dataParts: Map[String, Array[String]] = Map.empty,
-      fileParts: List[FilePart[_]] = List.empty
+      fileParts: List[FilePart[?]] = List.empty
   ): Request = {
     new RequestBuilder()
       .method("POST")
@@ -1616,63 +1675,70 @@ object FormSpec {
   }
 
   def validatorFactory(): ValidatorFactory = {
-    val validationConfig: vConfiguration[_] =
+    val validationConfig: vConfiguration[?] =
       Validation.byDefaultProvider().configure().messageInterpolator(new ParameterMessageInterpolator())
     validationConfig.buildValidatorFactory()
   }
 }
 
-class JavaForm(@BeanProperty var foo: java.util.List[JavaSubForm]) {
+class JavaForm(var foo: java.util.List[JavaSubForm]) {
   def this() = this(null)
 }
-class JavaSubForm(@BeanProperty var a: String, @BeanProperty var b: String) {
+class JavaSubForm(var a: String, var b: String) {
   def this() = this(null, null)
 }
 
 @Constraints.Validate
 class JavaMainForm extends Constraints.Validatable[ValidationError] {
 
-  @BeanProperty
   @Constraints.Required
   @Size(max = 1)
   @Valid
-  var entries: java.util.List[JavaChildForm] = _
+  var entries: java.util.List[JavaChildForm]             = _
+  def getEntries()                                       = entries
+  def setEntries(entries: java.util.List[JavaChildForm]) = this.entries = entries
 
-  @BeanProperty
   @Constraints.Required
   @Valid
-  var entry: JavaChildForm = _
+  var entry: JavaChildForm           = _
+  def getEntry()                     = entry
+  def setEntry(entry: JavaChildForm) = this.entry = entry
 
   override def validate = new ValidationError("entry", "validate of parent: I always get called!")
 }
 
 class AnotherJavaMainForm {
 
-  @BeanProperty
   @Constraints.Required
   @Size(max = 3)
   @Valid
-  var entries: java.util.List[JavaChildForm] = _
+  var entries: java.util.List[JavaChildForm]             = _
+  def getEntries()                                       = entries
+  def setEntries(entries: java.util.List[JavaChildForm]) = this.entries = entries
 
-  @BeanProperty
   @Constraints.Required
   @Valid
-  var entry: JavaChildForm = _
+  var entry: JavaChildForm           = _
+  def getEntry()                     = entry
+  def setEntry(entry: JavaChildForm) = this.entry = entry
 }
 
 @Constraints.Validate
 class JavaChildForm extends Constraints.Validatable[ValidationError] {
 
-  @BeanProperty
   @Constraints.Required
-  var name: String = _
+  var name: String          = _
+  def getName()             = name
+  def setName(name: String) = this.name = name
 
-  @BeanProperty
-  var value: java.lang.Integer = _
+  var value: java.lang.Integer           = _
+  def getValue()                         = value
+  def setValue(value: java.lang.Integer) = this.value = value
 
-  @BeanProperty
   @Valid
-  var entries: java.util.List[JavaChildChildForm] = _
+  var entries: java.util.List[JavaChildChildForm]             = _
+  def getEntries()                                            = entries
+  def setEntries(entries: java.util.List[JavaChildChildForm]) = this.entries = entries
 
   override def validate: ValidationError =
     if (value == null) new ValidationError("value", "validate of child: value can't be null!") else null
@@ -1681,20 +1747,34 @@ class JavaChildForm extends Constraints.Validatable[ValidationError] {
 @Constraints.Validate
 class JavaChildChildForm extends Constraints.Validatable[ValidationError] {
 
-  @BeanProperty
   @Constraints.Required
-  var name: String = _
+  var name: String          = _
+  def getName()             = name
+  def setName(name: String) = this.name = name
 
-  @BeanProperty
   @Constraints.Required
-  var street: String = _
+  var street: String            = _
+  def getStreet()               = street
+  def setStreet(street: String) = this.street = street
 
-  @BeanProperty
-  var value: java.lang.Integer = _
+  var value: java.lang.Integer           = _
+  def getValue()                         = value
+  def setValue(value: java.lang.Integer) = this.value = value
 
-  @BeanProperty
-  var notes: java.util.List[String] = _
+  var notes: java.util.List[String]           = _
+  def getNotes()                              = notes
+  def setNotes(notes: java.util.List[String]) = this.notes = notes
 
   override def validate: ValidationError =
     if (value == null) new ValidationError("value", "validate of child of child: value can't be null!") else null
+}
+
+class JavaI18NValidatorForm {
+
+  @Size(min = 10, max = 100)
+  @Valid
+  var note: String          = _
+  def getNote()             = note
+  def setNote(note: String) = this.note = note
+
 }

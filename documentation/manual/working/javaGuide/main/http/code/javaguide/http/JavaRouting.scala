@@ -6,18 +6,17 @@ package javaguide.http
 
 import java.util.concurrent.CompletableFuture
 
+import javaguide.http.routing._
+import javaguide.testhelpers.MockJavaAction
 import org.specs2.mutable.Specification
 import play.api.mvc.EssentialAction
 import play.api.mvc.RequestHeader
 import play.api.routing.Router
-import javaguide.http.routing._
-
-import play.api.test.Helpers._
 import play.api.test.FakeRequest
-import javaguide.testhelpers.MockJavaAction
-
+import play.api.test.Helpers._
 import play.core.j.JavaHandlerComponents
 import play.mvc.Http
+import play.mvc.Result
 
 class JavaRouting extends Specification {
   "the java router" should {
@@ -71,7 +70,7 @@ class JavaRouting extends Specification {
           "Location",
           call(
             new MockJavaAction(app.injector.instanceOf[JavaHandlerComponents]) {
-              override def invocation(req: Http.Request) =
+              override def invocation(req: Http.Request): CompletableFuture[Result] =
                 CompletableFuture.completedFuture(new javaguide.http.routing.controllers.Application().index())
             },
             FakeRequest()
@@ -81,7 +80,7 @@ class JavaRouting extends Specification {
     }
   }
 
-  def contentOf(rh: RequestHeader, router: Class[_ <: Router] = classOf[Routes]) = {
+  def contentOf(rh: RequestHeader, router: Class[? <: Router] = classOf[Routes]) = {
     running(_.configure("play.http.router" -> router.getName)) { app =>
       implicit val mat = app.materializer
       contentAsString(app.requestHandler.handlerForRequest(rh)._2 match {
@@ -90,7 +89,7 @@ class JavaRouting extends Specification {
     }
   }
 
-  def statusOf(rh: RequestHeader, router: Class[_ <: Router] = classOf[Routes]) = {
+  def statusOf(rh: RequestHeader, router: Class[? <: Router] = classOf[Routes]) = {
     running(_.configure("play.http.router" -> router.getName)) { app =>
       implicit val mat = app.materializer
       status(app.requestHandler.handlerForRequest(rh)._2 match {

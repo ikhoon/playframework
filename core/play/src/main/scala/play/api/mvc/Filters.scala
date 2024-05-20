@@ -4,11 +4,12 @@
 
 package play.api.mvc
 
-import akka.stream.Materializer
-import akka.util.ByteString
-import play.api.libs.streams.Accumulator
-import scala.concurrent.Promise
 import scala.concurrent.Future
+import scala.concurrent.Promise
+
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import play.api.libs.streams.Accumulator
 
 trait EssentialFilter {
   def apply(next: EssentialAction): EssentialAction
@@ -25,9 +26,9 @@ trait EssentialFilter {
  * {{{
  * object AccessLog extends Filter {
  *   override def apply(next: RequestHeader => Future[Result])(request: RequestHeader): Future[Result] = {
- * 		 val result = next(request)
- * 		 result.map { r => play.Logger.info(request + "\n\t => " + r; r }
- * 	 }
+ *     val result = next(request)
+ *     result.map { r => play.Logger.info(request + "\n\t => " + r); r }
+ *   }
  * }
  * }}}
  */
@@ -71,19 +72,18 @@ trait Filter extends EssentialFilter {
 
       Accumulator.flatten(bodyAccumulator.future.map { it =>
         it.mapFuture { simpleResult =>
-            // When the iteratee is done, we can redeem the promised result that was returned to the filter
-            promisedResult.success(simpleResult)
+          // When the iteratee is done, we can redeem the promised result that was returned to the filter
+          promisedResult.success(simpleResult)
+          result
+        }.recoverWith {
+          case t: Throwable =>
+            // If the iteratee finishes with an error, fail the promised result that was returned to the
+            // filter with the same error. Note, we MUST use tryFailure here as it's possible that a)
+            // promisedResult was already completed successfully in the mapM method above but b) calculating
+            // the result in that method caused an error, so we ended up in this recover block anyway.
+            promisedResult.tryFailure(t)
             result
-          }
-          .recoverWith {
-            case t: Throwable =>
-              // If the iteratee finishes with an error, fail the promised result that was returned to the
-              // filter with the same error. Note, we MUST use tryFailure here as it's possible that a)
-              // promisedResult was already completed successfully in the mapM method above but b) calculating
-              // the result in that method caused an error, so we ended up in this recover block anyway.
-              promisedResult.tryFailure(t)
-              result
-          }
+        }
       })
     }
   }
@@ -93,7 +93,7 @@ object Filter {
   def apply(
       filter: (RequestHeader => Future[Result], RequestHeader) => Future[Result]
   )(implicit m: Materializer): Filter = new Filter {
-    implicit def mat                                                                 = m
+    implicit def mat: Materializer                                                   = m
     def apply(f: RequestHeader => Future[Result])(rh: RequestHeader): Future[Result] = filter(f, rh)
   }
 }

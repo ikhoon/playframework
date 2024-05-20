@@ -4,16 +4,16 @@
 
 package play.api
 
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
+
+import scala.collection.mutable
+import scala.jdk.CollectionConverters._
+import scala.language.implicitConversions
 
 import org.slf4j.{ Logger => Slf4jLogger }
 import org.slf4j.LoggerFactory
 import org.slf4j.Marker
-
-import scala.collection.mutable
-import scala.language.implicitConversions
-import scala.jdk.CollectionConverters._
 
 /**
  * Typical logger interface.
@@ -316,7 +316,7 @@ object Logger {
    * @param clazz a class whose name will be used as logger name
    * @return a logger
    */
-  def apply(clazz: Class[_]): Logger = new Logger(LoggerFactory.getLogger(clazz.getName.stripSuffix("$")))
+  def apply(clazz: Class[?]): Logger = new Logger(LoggerFactory.getLogger(clazz.getName.stripSuffix("$")))
 }
 
 /**
@@ -327,7 +327,6 @@ object Logger {
  *   implicit val markerContext: MarkerContext = org.slf4j.MarkerFactory.getMarker("EXAMPLEMARKER")
  *   log.error("This message will be logged with the EXAMPLEMARKER marker")
  * }}}
- *
  */
 trait MarkerContext {
 

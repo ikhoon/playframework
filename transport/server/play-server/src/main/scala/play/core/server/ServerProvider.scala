@@ -4,12 +4,13 @@
 
 package play.core.server
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
+import scala.concurrent.Future
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
 import play.api.Application
 import play.api.Configuration
 import play.core.ApplicationProvider
-import scala.concurrent.Future
 
 /**
  * An object that knows how to obtain a server. Instantiating a
@@ -46,7 +47,7 @@ object ServerProvider {
       appProvider: ApplicationProvider,
       actorSystem: ActorSystem,
       materializer: Materializer,
-      stopHook: () => Future[_]
+      stopHook: () => Future[?]
   )
 
   /**

@@ -4,11 +4,12 @@
 
 package play.api.http
 
-import play.api.Logger
-import scala.util.parsing.input.CharSequenceReader
-import scala.util.parsing.combinator.Parsers
 import scala.collection.BitSet
+import scala.util.parsing.combinator.Parsers
+import scala.util.parsing.input.CharSequenceReader
+
 import play.api.http.MediaRange.MediaRangeParser
+import play.api.Logger
 
 /**
  * A media type as defined by RFC 2616 3.7.
@@ -191,7 +192,7 @@ object MediaRange {
      *
      * These patterns are translated directly using the same naming
      */
-    val ctl  = acceptIf { c => (c >= 0 && c <= 0x1F) || c == 0x7F }(_ => "Expected a control character")
+    val ctl  = acceptIf { c => (c >= 0 && c <= 0x1f) || c == 0x7f }(_ => "Expected a control character")
     val char = acceptIf(_ < 0x80)(_ => "Expected an ascii character")
     val text = not(ctl) ~> any
     val separators = {

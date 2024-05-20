@@ -4,40 +4,41 @@
 
 package play.api.test
 
-import scala.language.implicitConversions
 import java.nio.file.Path
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
-import akka.stream.scaladsl.Source
-import akka.stream._
-import akka.stream.testkit.NoMaterializer
-import akka.util.ByteString
-import akka.util.Timeout
-import org.openqa.selenium.WebDriver
+
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.language.implicitConversions
+import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
+import scala.util.Try
+
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.testkit.NoMaterializer
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.util.Timeout
 import org.openqa.selenium.firefox._
 import org.openqa.selenium.htmlunit._
+import org.openqa.selenium.WebDriver
 import play.api._
 import play.api.http._
 import play.api.i18n._
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.Files
 import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import play.api.libs.streams.Accumulator
-import play.api.mvc.Cookie.SameSite
+import play.api.libs.Files
 import play.api.mvc._
-import play.libs.{ Files => JFiles }
-import play.mvc.Http.{ RequestBody => JRequestBody }
+import play.api.mvc.Cookie.SameSite
+import play.api.routing.Router
 import play.mvc.Http.{ MultipartFormData => JMultipartFormData }
+import play.mvc.Http.{ RequestBody => JRequestBody }
 import play.twirl.api.Content
-
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.language.reflectiveCalls
-import scala.reflect.ClassTag
-import scala.util.Try
 
 /**
  * Helper functions to run tests.
@@ -97,11 +98,26 @@ trait PlayRunners extends HttpVerbs {
   /**
    * Executes a block of code in a running server.
    */
-  def running[T](testServer: TestServer)(block: => T): T = {
+  def running[T](testServer: TestServer)(block: => T): T =
+    runningWithPort(testServer)(_ => block)
+
+  /**
+   * Executes a block of code in a running server, with a port.
+   * If available the http port will be used first, before falling back to the https port.
+   */
+  def runningWithPort[T](testServer: TestServer)(block: Int => T): T = {
     runSynchronized(testServer.application) {
       try {
         testServer.start()
-        block
+        block(
+          testServer.runningHttpPort
+            .orElse(testServer.runningHttpsPort)
+            .getOrElse(
+              throw new IllegalStateException(
+                "Test server is running, but neither http nor https port can not be determined!"
+              )
+            )
+        )
       } finally {
         testServer.stop()
       }
@@ -118,15 +134,40 @@ trait PlayRunners extends HttpVerbs {
   }
 
   /**
+   * Executes a block of code in a running server, with a test browser and a port.
+   */
+  def runningWithPort[T, WEBDRIVER <: WebDriver](testServer: TestServer, webDriver: Class[WEBDRIVER])(
+      block: (TestBrowser, Int) => T
+  ): T = {
+    runningWithPort(testServer, WebDriverFactory(webDriver))(block)
+  }
+
+  /**
    * Executes a block of code in a running server, with a test browser.
    */
-  def running[T](testServer: TestServer, webDriver: WebDriver)(block: TestBrowser => T): T = {
+  def running[T](testServer: TestServer, webDriver: WebDriver)(block: TestBrowser => T): T =
+    runningWithPort(testServer, webDriver)((testBrowser, _) => block(testBrowser))
+
+  /**
+   * Executes a block of code in a running server, with a test browser and a port.
+   * If available the http port will be used first, before falling back to the https port.
+   */
+  def runningWithPort[T](testServer: TestServer, webDriver: WebDriver)(block: (TestBrowser, Int) => T): T = {
     var browser: TestBrowser = null
     runSynchronized(testServer.application) {
       try {
         testServer.start()
         browser = TestBrowser(webDriver, None)
-        block(browser)
+        block(
+          browser,
+          testServer.runningHttpPort
+            .orElse(testServer.runningHttpsPort)
+            .getOrElse(
+              throw new IllegalStateException(
+                "Test server is running, but neither http nor https port can not be determined!"
+              )
+            )
+        )
       } finally {
         if (browser != null) {
           browser.quit()
@@ -137,10 +178,15 @@ trait PlayRunners extends HttpVerbs {
   }
 
   /**
-   * The port to use for a test server. Defaults to 19001. May be configured using the system property
+   * The port to use for a test server. Defaults to a random port. May be configured using the system property
    * testserver.port
    */
-  lazy val testServerPort: Int = sys.props.get("testserver.port").map(_.toInt).getOrElse(19001)
+  def testServerPort: Int = sys.props.get("testserver.port").map(_.toInt).getOrElse(0)
+
+  def testServerHttpsPort: Option[Int] = sys.props.get("testserver.httpsport").map(_.toInt)
+
+  def testServerAddress: String =
+    sys.props.get("testserver.address").orElse(sys.env.get("PLAY_TEST_SERVER_HTTP_ADDRESS")).getOrElse("0.0.0.0")
 
   /**
    * Constructs a in-memory (h2) database configuration to add to an Application.
@@ -289,6 +335,41 @@ trait EssentialActionCaller {
 trait RouteInvokers extends EssentialActionCaller {
   self: Writeables =>
 
+  private def callHandler[T](handler: Handler, rh: RequestHeader, body: T)(
+      implicit w: Writeable[T],
+      mat: Materializer
+  ): Option[Future[Result]] = {
+    handler match {
+      case a: EssentialAction =>
+        Some(call(a, rh, body))
+      case _ => None
+    }
+  }
+
+  /**
+   * Use the Router to determine the Action to call for this request and execute it.
+   *
+   * The body is serialised using the implicit writable, so that the action body parser can deserialize it.
+   */
+  def route[T](router: Router, rh: RequestHeader, body: T)(
+      implicit w: Writeable[T],
+      mat: Materializer
+  ): Option[Future[Result]] = {
+    router.handlerFor(rh).flatMap(callHandler(_, rh, body))
+  }
+
+  /**
+   * Use the Router to determine the Action to call for this request and execute it.
+   *
+   * The body is serialised using the implicit writable, so that the action body parser can deserialize it.
+   */
+  def route[T](router: Router, req: Request[T])(
+      implicit w: Writeable[T],
+      mat: Materializer
+  ): Option[Future[Result]] = {
+    route(router, req, req.body)
+  }
+
   // Java compatibility
   def jRoute(app: Application, r: RequestHeader, body: JRequestBody): Option[Future[Result]] = {
     Option(body.asMultipartFormData[Any]()) match {
@@ -325,11 +406,7 @@ trait RouteInvokers extends EssentialActionCaller {
   def route[T](app: Application, rh: RequestHeader, body: T)(implicit w: Writeable[T]): Option[Future[Result]] = {
     val (taggedRh, handler) = app.requestHandler.handlerForRequest(rh)
     import app.materializer
-    handler match {
-      case a: EssentialAction =>
-        Some(call(a, taggedRh, body))
-      case _ => None
-    }
+    callHandler(handler, taggedRh, body)
   }
 
   /**
@@ -504,6 +581,7 @@ trait ResultExtractors {
       case ResponseHeader(SEE_OTHER, headers, _)          => headers.get(LOCATION)
       case ResponseHeader(TEMPORARY_REDIRECT, headers, _) => headers.get(LOCATION)
       case ResponseHeader(MOVED_PERMANENTLY, headers, _)  => headers.get(LOCATION)
+      case ResponseHeader(PERMANENT_REDIRECT, headers, _) => headers.get(LOCATION)
       case ResponseHeader(_, _, _)                        => None
     }
 
@@ -669,7 +747,7 @@ trait StubControllerComponentsFactory
    *
    * @param bodyParser the body parser used to parse any content, stubBodyParser(AnyContentAsEmpty) by default.
    * @param playBodyParsers the playbodyparsers, defaults to stubPlayBodyParsers(NoMaterializer)
-   * @param messagesApi: the messages api, new DefaultMessagesApi() by default.
+   * @param messagesApi the messages api, new DefaultMessagesApi() by default.
    * @param langs the langs instance for messaging, new DefaultLangs() by default.
    * @param fileMimeTypes the mime type associated with file extensions, new DefaultFileMimeTypes(FileMimeTypesConfiguration() by default.
    * @param executionContext an execution context, defaults to ExecutionContext.global

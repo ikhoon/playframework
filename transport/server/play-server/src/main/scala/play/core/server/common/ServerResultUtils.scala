@@ -4,23 +4,23 @@
 
 package play.core.server.common
 
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.util.ByteString
-import play.api.Logger
-import play.api.mvc._
-import play.api.http._
-import play.api.http.HeaderNames._
-import play.api.http.Status._
-import play.api.mvc.request.RequestAttrKey
-import play.core.utils.AsciiBitSet
-import play.core.utils.AsciiRange
-import play.core.utils.AsciiSet
-
 import scala.annotation.tailrec
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.Future
 import scala.util.control.NonFatal
+
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import play.api.http._
+import play.api.http.HeaderNames._
+import play.api.http.Status._
+import play.api.mvc._
+import play.api.mvc.request.RequestAttrKey
+import play.api.Logger
+import play.core.utils.AsciiBitSet
+import play.core.utils.AsciiRange
+import play.core.utils.AsciiSet
 
 private[play] final class ServerResultUtils(
     sessionBaker: SessionCookieBaker,
@@ -37,8 +37,10 @@ private[play] final class ServerResultUtils(
       if (result.header.headers.get(CONNECTION).exists(_.equalsIgnoreCase(CLOSE))) {
         // Close connection, header already exists
         DefaultClose
-      } else if ((result.body.isInstanceOf[HttpEntity.Streamed] && result.body.contentLength.isEmpty)
-                 || request.headers.get(CONNECTION).exists(_.equalsIgnoreCase(CLOSE))) {
+      } else if (
+        (result.body.isInstanceOf[HttpEntity.Streamed] && result.body.contentLength.isEmpty)
+        || request.headers.get(CONNECTION).exists(_.equalsIgnoreCase(CLOSE))
+      ) {
         // We need to close the connection and set the header
         SendClose
       } else {
@@ -47,8 +49,10 @@ private[play] final class ServerResultUtils(
     } else {
       if (result.header.headers.get(CONNECTION).exists(_.equalsIgnoreCase(CLOSE))) {
         DefaultClose
-      } else if ((result.body.isInstanceOf[HttpEntity.Streamed] && result.body.contentLength.isEmpty) ||
-                 request.headers.get(CONNECTION).forall(!_.equalsIgnoreCase(KEEP_ALIVE))) {
+      } else if (
+        (result.body.isInstanceOf[HttpEntity.Streamed] && result.body.contentLength.isEmpty) ||
+        request.headers.get(CONNECTION).forall(!_.equalsIgnoreCase(KEEP_ALIVE))
+      ) {
         DefaultClose
       } else {
         SendKeepAlive
@@ -115,7 +119,7 @@ private[play] final class ServerResultUtils(
      * From https://tools.ietf.org/html/rfc7230#section-3.2.6:
      *   obs-text       = %x80-FF
      */
-    val ObsText      = new AsciiRange(0x80, 0xFF)
+    val ObsText      = new AsciiRange(0x80, 0xff)
     val FieldVChar   = AsciiSet.Sets.VChar ||| ObsText
     val FieldContent = FieldVChar ||| AsciiSet(' ', '\t')
     FieldContent.toBitSet
@@ -226,8 +230,8 @@ private[play] final class ServerResultUtils(
   /**
    * Cancel the entity.
    *
-   * While theoretically, an Akka streams Source is not supposed to hold resources, in practice, this is very often not
-   * the case, for example, the response from an Akka HTTP client may have an associated Source that must be consumed
+   * While theoretically, an Pekko streams Source is not supposed to hold resources, in practice, this is very often not
+   * the case, for example, the response from an Pekko HTTP client may have an associated Source that must be consumed
    * (or cancelled) before the associated connection can be returned to the connection pool.
    */
   def cancelEntity(entity: HttpEntity)(implicit mat: Materializer) = {
@@ -251,8 +255,8 @@ private[play] final class ServerResultUtils(
    * force an HTTP 1.0 connection to remain open.
    */
   case object SendKeepAlive extends ConnectionHeader {
-    override def willClose = false
-    override def header    = Some(KEEP_ALIVE)
+    override def willClose              = false
+    override def header: Option[String] = Some(KEEP_ALIVE)
   }
 
   /**
@@ -260,8 +264,8 @@ private[play] final class ServerResultUtils(
    * force an HTTP 1.1 connection to close.
    */
   case object SendClose extends ConnectionHeader {
-    override def willClose = true
-    override def header    = Some(CLOSE)
+    override def willClose              = true
+    override def header: Option[String] = Some(CLOSE)
   }
 
   /**
@@ -270,8 +274,8 @@ private[play] final class ServerResultUtils(
    * or when the response already has a Connection: close header.
    */
   case object DefaultClose extends ConnectionHeader {
-    override def willClose = true
-    override def header    = None
+    override def willClose              = true
+    override def header: Option[String] = None
   }
 
   /**
@@ -280,8 +284,8 @@ private[play] final class ServerResultUtils(
    * open.
    */
   case object DefaultKeepAlive extends ConnectionHeader {
-    override def willClose = false
-    override def header    = None
+    override def willClose              = false
+    override def header: Option[String] = None
   }
 
   // Values for the Connection header

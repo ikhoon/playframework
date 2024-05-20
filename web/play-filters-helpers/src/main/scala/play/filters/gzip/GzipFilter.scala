@@ -10,23 +10,23 @@ import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-import akka.stream.scaladsl._
-import akka.stream.FlowShape
-import akka.stream.Materializer
-import akka.stream.OverflowStrategy
-import akka.util.ByteString
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.jdk.FunctionConverters._
+
 import com.typesafe.config.ConfigMemorySize
-import play.api.Configuration
-import play.api.Logger
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.FlowShape
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.stream.OverflowStrategy
+import org.apache.pekko.util.ByteString
 import play.api.http._
 import play.api.inject._
 import play.api.libs.streams.GzipFlow
-import play.api.mvc.RequestHeader.acceptHeader
 import play.api.mvc._
-
-import scala.jdk.FunctionConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import play.api.mvc.RequestHeader.acceptHeader
+import play.api.Configuration
+import play.api.Logger
 
 /**
  * A gzip filter.
@@ -60,8 +60,9 @@ class GzipFilter @Inject() (config: GzipFilterConfig)(implicit mat: Materializer
   )(implicit mat: Materializer) =
     this(GzipFilterConfig(bufferSize, chunkedThreshold, threshold, shouldGzip, compressionLevel))
 
-  def apply(next: EssentialAction) = new EssentialAction {
-    implicit val ec = mat.executionContext
+  def apply(next: EssentialAction): EssentialAction = new EssentialAction {
+    implicit val ec: ExecutionContext = mat.executionContext
+
     def apply(request: RequestHeader) = {
       if (mayCompress(request)) {
         next(request).mapFuture(result => handleResult(request, result))
@@ -71,7 +72,7 @@ class GzipFilter @Inject() (config: GzipFilterConfig)(implicit mat: Materializer
     }
   }
 
-  private def createGzipFlow: Flow[ByteString, ByteString, _] =
+  private def createGzipFlow: Flow[ByteString, ByteString, ?] =
     GzipFlow.gzip(config.bufferSize, config.compressionLevel)
 
   private def handleResult(request: RequestHeader, result: Result): Future[Result] = {
@@ -286,7 +287,7 @@ object GzipFilterConfig {
             }
           }
         } else {
-          // The whitelist is defined. We gzip the result IFF there is a matching whitelist entry.
+          // The whitelist is defined. We gzip the result if there is a matching whitelist entry.
           res.body.contentType match {
             case Some(MediaType.parse(outgoing)) => whiteList.exists(mask => matches(outgoing, mask))
             case _                               => false // Fail closed (to not gziping), since whitelists are intentionally strict.

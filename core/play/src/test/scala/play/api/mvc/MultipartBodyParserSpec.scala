@@ -4,17 +4,17 @@
 
 package play.api.mvc
 
-import akka.stream._
-import akka.stream.scaladsl._
-import akka.actor.ActorSystem
-import akka.util.ByteString
+import scala.concurrent.duration.Duration
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.util.ByteString
 import org.specs2.mutable.Specification
 import play.core.test.FakeHeaders
 import play.core.test.FakeRequest
-
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
 
 class MultipartBodyParserSpec extends Specification {
   "Multipart body parser" should {

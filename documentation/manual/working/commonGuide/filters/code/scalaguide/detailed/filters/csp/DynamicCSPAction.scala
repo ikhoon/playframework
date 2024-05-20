@@ -6,12 +6,13 @@ package scalaguide.detailed.filters.csp
 
 // #scala-csp-dynamic-action
 package controllers {
-  import akka.stream.Materializer
   import javax.inject._
-  import play.api.mvc._
-  import play.filters.csp._
 
   import scala.concurrent.ExecutionContext
+
+  import org.apache.pekko.stream.Materializer
+  import play.api.mvc._
+  import play.filters.csp._
 
   // Custom CSP action
   class AssetAwareCSPActionBuilder @Inject() (
@@ -19,8 +20,7 @@ package controllers {
       cspConfig: CSPConfig,
       assetCache: AssetCache
   )(
-      implicit
-      protected override val executionContext: ExecutionContext,
+      implicit protected override val executionContext: ExecutionContext,
       protected override val mat: Materializer
   ) extends CSPActionBuilder {
     override def parser: BodyParser[AnyContent] = bodyParsers.default

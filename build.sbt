@@ -1,14 +1,17 @@
 // Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
 
+import java.io.StringWriter
+import java.util.Properties
+
+import sbt._
+import sbt.io.Path._
+import sbt.Keys.parallelExecution
+
+import pl.project13.scala.sbt.JmhPlugin.generateJmhSourcesAndResources
 import BuildSettings._
 import Dependencies._
 import Generators._
-import interplay.PlayBuildBase.autoImport._
-import pl.project13.scala.sbt.JmhPlugin.generateJmhSourcesAndResources
-import sbt.Keys.parallelExecution
-import sbt._
-import sbt.io.Path._
-import org.scalafmt.sbt.ScalafmtPlugin
+import VersionHelper._
 
 // Customise sbt-dynver's behaviour to make it work with tags which aren't v-prefixed
 (ThisBuild / dynverVTagPrefix) := false
@@ -20,25 +23,41 @@ Global / onLoad := (Global / onLoad).value.andThen { s =>
   s
 }
 
-lazy val BuildLinkProject = PlayNonCrossBuiltProject("Build-Link", "dev-mode/build-link")
+// Makes sure to increase the version and remove the distance
+ThisBuild / version := dynverGitDescribeOutput.value
+  .mkVersion(out => versionFmt(out, dynverSonatypeSnapshots.value), fallbackVersion(dynverCurrentDate.value))
+ThisBuild / dynver := {
+  val d = new java.util.Date
+  sbtdynver.DynVer
+    .getGitDescribeOutput(d)
+    .mkVersion(out => versionFmt(out, dynverSonatypeSnapshots.value), fallbackVersion(d))
+}
+
+lazy val PlayBuildLinkProject = PlayNonCrossBuiltProject("Play-Build-Link", "dev-mode/play-build-link")
   .dependsOn(PlayExceptionsProject)
 
-// run-support project is only compiled against sbt scala version
-lazy val RunSupportProject = PlaySbtProject("Run-Support", "dev-mode/run-support")
+// play-run-support project is only compiled against sbt scala version
+lazy val PlayRunSupportProject = PlayNonCrossBuiltProject("Play-Run-Support", "dev-mode/play-run-support")
   .settings(
-    target := target.value / "run-support",
-    libraryDependencies ++= runSupportDependencies((pluginCrossBuild / sbtVersion).value)
+    target := target.value / "play-run-support",
+    libraryDependencies ++= runSupportDeps,
+    mimaPreviousArtifacts := Set.empty, // TODO: Remove later
+    // Or:
+    // MimaKeys.mimaPreviousArtifacts := Set("org.playframework" % "play-run-support_2.12" % "3.0.0"),
   )
-  .dependsOn(BuildLinkProject)
+  .dependsOn(PlayBuildLinkProject)
 
-lazy val RoutesCompilerProject = PlayDevelopmentProject("Routes-Compiler", "dev-mode/routes-compiler")
+// This project is actually not needed by Play, we (cross) publish it for the community only:
+// https://github.com/playframework/playframework/issues/5290
+lazy val PlayRoutesCompilerProject = PlayDevelopmentProject("Play-Routes-Compiler", "dev-mode/play-routes-compiler")
   .enablePlugins(SbtTwirl)
   .settings(
+    scalacOptions -= "-Xsource:3", // Since this is actually a sbt plugin and the codebase is 2.12, this flag causes problems when cross compiling
     libraryDependencies ++= routesCompilerDependencies(scalaVersion.value),
     TwirlKeys.templateFormats := Map("twirl" -> "play.routes.compiler.ScalaFormat")
   )
 
-lazy val SbtRoutesCompilerProject = PlaySbtProject("Sbt-Routes-Compiler", "dev-mode/routes-compiler")
+lazy val SbtRoutesCompilerProject = PlaySbtProject("Sbt-Routes-Compiler", "dev-mode/play-routes-compiler")
   .enablePlugins(SbtTwirl)
   .settings(
     target := target.value / "sbt-routes-compiler",
@@ -46,16 +65,15 @@ lazy val SbtRoutesCompilerProject = PlaySbtProject("Sbt-Routes-Compiler", "dev-m
     TwirlKeys.templateFormats := Map("twirl" -> "play.routes.compiler.ScalaFormat")
   )
 
-lazy val StreamsProject = PlayCrossBuiltProject("Play-Streams", "core/play-streams")
+lazy val PlayStreamsProject = PlayCrossBuiltProject("Play-Streams", "core/play-streams")
   .settings(libraryDependencies ++= streamsDependencies)
 
 lazy val PlayExceptionsProject = PlayNonCrossBuiltProject("Play-Exceptions", "core/play-exceptions")
 
-lazy val billOfMaterials = PlayCrossBuiltProject("bill-of-materials", "dev-mode/bill-of-materials")
+lazy val PlayBillOfMaterials = PlayCrossBuiltProject("Play-Bom", "dev-mode/play-bill-of-materials")
   .enablePlugins(BillOfMaterialsPlugin)
   .settings(
-    name := "play-bom",
-    bomIncludeProjects := userProjects,
+    bomIncludeProjects    := userProjects,
     mimaPreviousArtifacts := Set.empty
   )
 
@@ -76,8 +94,8 @@ lazy val PlayProject = PlayCrossBuiltProject("Play", "core/play")
           version.value,
           scalaVersion.value,
           sbtVersion.value,
-          Dependencies.akkaVersion,
-          Dependencies.akkaHttpVersion,
+          Dependencies.pekkoVersion,
+          Dependencies.pekkoHttpVersion,
           (Compile / sourceManaged).value
         )
       )
@@ -101,8 +119,9 @@ lazy val PlayProject = PlayCrossBuiltProject("Play", "core/play")
   )
   .settings(Docs.playdocSettings: _*)
   .dependsOn(
-    BuildLinkProject,
-    StreamsProject
+    PlayBuildLinkProject,
+    PlayStreamsProject,
+    PlayConfiguration
   )
 
 lazy val PlayServerProject = PlayCrossBuiltProject("Play-Server", "transport/server/play-server")
@@ -116,21 +135,18 @@ lazy val PlayNettyServerProject = PlayCrossBuiltProject("Play-Netty-Server", "tr
   .settings(libraryDependencies ++= netty)
   .dependsOn(PlayServerProject)
 
-lazy val PlayAkkaHttpServerProject =
-  PlayCrossBuiltProject("Play-Akka-Http-Server", "transport/server/play-akka-http-server")
-    .dependsOn(PlayServerProject, StreamsProject)
+lazy val PlayPekkoHttpServerProject =
+  PlayCrossBuiltProject("Play-Pekko-Http-Server", "transport/server/play-pekko-http-server")
+    .dependsOn(PlayServerProject, PlayStreamsProject)
     .dependsOn(PlayGuiceProject % "test")
     .settings(
       libraryDependencies ++= specs2Deps.map(_ % "test"),
-      libraryDependencies += akkaHttp
+      libraryDependencies += pekkoHttp
     )
 
-lazy val PlayAkkaHttp2SupportProject =
-  PlayCrossBuiltProject("Play-Akka-Http2-Support", "transport/server/play-akka-http2-support")
-    .dependsOn(PlayAkkaHttpServerProject)
-    .settings(
-      libraryDependencies += akkaHttp2Support
-    )
+lazy val PlayPekkoHttp2SupportProject =
+  PlayCrossBuiltProject("Play-Pekko-Http2-Support", "transport/server/play-pekko-http2-support")
+    .dependsOn(PlayPekkoHttpServerProject)
 
 lazy val PlayArmeriaServerProject = PlayCrossBuiltProject("Play-Armeria-Server", "transport/server/play-armeria-server")
   .settings(libraryDependencies += armeria)
@@ -163,6 +179,7 @@ lazy val PlayJdbcEvolutionsProject = PlayCrossBuiltProject("Play-JDBC-Evolutions
   .dependsOn(PlayJavaJdbcProject % "test")
 
 lazy val PlayJavaJdbcProject = PlayCrossBuiltProject("Play-Java-JDBC", "persistence/play-java-jdbc")
+  .settings(libraryDependencies += assertj % Test)
   .dependsOn(PlayJdbcProject % "compile->compile;test->test", PlayJavaProject)
   .dependsOn(PlaySpecs2Project % "test", PlayGuiceProject % "test")
 
@@ -174,20 +191,21 @@ lazy val PlayJpaProject = PlayCrossBuiltProject("Play-Java-JPA", "persistence/pl
 
 lazy val PlayTestProject = PlayCrossBuiltProject("Play-Test", "testkit/play-test")
   .settings(
-    libraryDependencies ++= testDependencies ++ Seq(h2database % "test"),
+    libraryDependencies ++= testDependencies ++ Seq(h2database, assertj).map(_ % "test"),
     (Test / parallelExecution) := false
   )
   .dependsOn(
     PlayGuiceProject,
     PlayServerProject,
     // We still need a server provider when running Play-Test tests.
-    // Since Akka HTTP is the default, we should use it here.
-    PlayAkkaHttpServerProject % "test"
+    // Since Pekko HTTP is the default, we should use it here.
+    PlayPekkoHttpServerProject % "test"
   )
 
 lazy val PlaySpecs2Project = PlayCrossBuiltProject("Play-Specs2", "testkit/play-specs2")
   .settings(
-    libraryDependencies ++= specs2Deps,
+    libraryDependencies ++= specs2Deps :+ (if (ScalaArtifacts.isScala3(scalaVersion.value)) { mockitoAll }
+                                           else { specs2Mock }),
     (Test / parallelExecution) := false
   )
   .dependsOn(PlayTestProject)
@@ -214,10 +232,10 @@ lazy val PlayDocsProject = PlayCrossBuiltProject("Play-Docs", "dev-mode/play-doc
   .settings(
     libraryDependencies ++= playDocsDependencies
   )
-  .dependsOn(PlayAkkaHttpServerProject)
+  .dependsOn(PlayNettyServerProject)
 
 lazy val PlayGuiceProject = PlayCrossBuiltProject("Play-Guice", "core/play-guice")
-  .settings(libraryDependencies ++= guiceDeps ++ specs2Deps.map(_ % "test"))
+  .settings(libraryDependencies ++= guiceDeps ++ (specs2Deps ++ Seq(assertj)).map(_ % "test"))
   .dependsOn(
     PlayProject % "compile;test->test"
   )
@@ -231,14 +249,14 @@ lazy val SbtPluginProject = PlaySbtPluginProject("Sbt-Plugin", "dev-mode/sbt-plu
         version.value,
         (PlayProject / scalaVersion).value,
         sbtVersion.value,
-        Dependencies.akkaVersion,
-        Dependencies.akkaHttpVersion,
+        Dependencies.pekkoVersion,
+        Dependencies.pekkoHttpVersion,
         (Compile / sourceManaged).value
       )
     }.taskValue,
     (Compile / headerSources) ++= (sbtTestDirectory.value ** ("*.scala" || "*.java" || "*.sbt")).get,
   )
-  .dependsOn(SbtRoutesCompilerProject, RunSupportProject)
+  .dependsOn(SbtRoutesCompilerProject, PlayRunSupportProject)
 
 lazy val SbtScriptedToolsProject = PlaySbtPluginProject("Sbt-Scripted-Tools", "dev-mode/sbt-scripted-tools")
   .enablePlugins(SbtPlugin)
@@ -253,6 +271,15 @@ lazy val PlayLogback = PlayCrossBuiltProject("Play-Logback", "core/play-logback"
   )
   .dependsOn(PlayProject)
   .dependsOn(PlaySpecs2Project % "test")
+
+lazy val PlayConfiguration = PlayCrossBuiltProject("Play-Configuration", "core/play-configuration")
+  .settings(
+    libraryDependencies ++= Seq(typesafeConfig, slf4jApi) ++ specs2Deps.map(_ % Test),
+    (Test / parallelExecution) := false,
+    // quieten deprecation warnings in tests
+    (Test / scalacOptions) := (Test / scalacOptions).value.diff(Seq("-deprecation"))
+  )
+  .dependsOn(PlayExceptionsProject)
 
 lazy val PlayWsProject = PlayCrossBuiltProject("Play-WS", "transport/client/play-ws")
   .settings(
@@ -274,7 +301,7 @@ lazy val PlayAhcWsProject = PlayCrossBuiltProject("Play-AHC-WS", "transport/clie
   .dependsOn(PlayWsProject, PlayCaffeineCacheProject % "test")
   .dependsOn(PlaySpecs2Project % "test")
   .dependsOn(PlayTestProject % "test->test")
-  .dependsOn(PlayAkkaHttpServerProject % "test") // Because we need a server provider when running the tests
+  .dependsOn(PlayPekkoHttpServerProject % "test") // Because we need a server provider when running the tests
 
 lazy val PlayOpenIdProject = PlayCrossBuiltProject("Play-OpenID", "web/play-openid")
   .settings(
@@ -285,47 +312,42 @@ lazy val PlayOpenIdProject = PlayCrossBuiltProject("Play-OpenID", "web/play-open
   .dependsOn(PlayAhcWsProject)
   .dependsOn(PlaySpecs2Project % "test")
 
-lazy val PlayFiltersHelpersProject = PlayCrossBuiltProject("Filters-Helpers", "web/play-filters-helpers")
+lazy val PlayFiltersHelpersProject = PlayCrossBuiltProject("Play-Filters-Helpers", "web/play-filters-helpers")
   .settings(
     libraryDependencies ++= playFilterDeps,
     (Test / parallelExecution) := false
   )
   .dependsOn(
     PlayProject,
-    PlayTestProject           % "test",
-    PlayJavaProject           % "test",
-    PlaySpecs2Project         % "test",
-    PlayAhcWsProject          % "test",
-    PlayAkkaHttpServerProject % "test" // Because we need a server provider when running the tests
+    PlayTestProject            % "test",
+    PlayJavaProject            % "test",
+    PlaySpecs2Project          % "test",
+    PlayAhcWsProject           % "test",
+    PlayPekkoHttpServerProject % "test" // Because we need a server provider when running the tests
   )
 
 lazy val PlayIntegrationTestProject = PlayCrossBuiltProject("Play-Integration-Test", "core/play-integration-test")
 // This project is just for testing Play, not really a public artifact
   .settings(disablePublishing)
-  .configs(IntegrationTest)
   .settings(
-    Defaults.itSettings,
-    inConfig(IntegrationTest)(ScalafmtPlugin.scalafmtConfigSettings),
-    headerSettings(IntegrationTest),
-    inConfig(IntegrationTest)(JavaFormatterPlugin.toBeScopedSettings),
-    libraryDependencies += okHttp % IntegrationTest,
-    (IntegrationTest / parallelExecution) := false,
-    mimaPreviousArtifacts := Set.empty,
-    (IntegrationTest / fork) := true,
-    (IntegrationTest / javaOptions) += "-Dfile.encoding=UTF8",
+    libraryDependencies += okHttp % Test,
+    (Test / parallelExecution)   := false,
+    mimaPreviousArtifacts        := Set.empty,
+    (Test / fork)                := true,
+    (Test / javaOptions) += "-Dfile.encoding=UTF8",
   )
   .dependsOn(
-    PlayProject       % "it->test",
-    PlayLogback       % "it->test",
-    PlayAhcWsProject  % "it->test",
-    PlayServerProject % "it->test",
+    PlayProject       % "test->test",
+    PlayLogback       % "test->test",
+    PlayAhcWsProject  % "test->test",
+    PlayServerProject % "test->test",
     PlaySpecs2Project
   )
   .dependsOn(PlayFiltersHelpersProject)
   .dependsOn(PlayJavaProject)
   .dependsOn(PlayJavaFormsProject)
-  .dependsOn(PlayAkkaHttpServerProject)
-  .dependsOn(PlayAkkaHttp2SupportProject)
+  .dependsOn(PlayPekkoHttpServerProject)
+  .dependsOn(PlayPekkoHttp2SupportProject)
   .dependsOn(PlayArmeriaServerProject)
   .dependsOn(PlayNettyServerProject)
 
@@ -342,24 +364,24 @@ lazy val PlayMicrobenchmarkProject = PlayCrossBuiltProject("Play-Microbenchmark"
     // we need to put our JMH sources into src/test so they can pick
     // up the integration test files.
     // See: https://github.com/ktoso/sbt-jmh/pull/73#issue-163891528
-    (Jmh / classDirectory) := (Test / classDirectory).value,
-    (Jmh / dependencyClasspath) := (Test / dependencyClasspath).value,
-    (Jmh / generateJmhSourcesAndResources) := (Jmh / generateJmhSourcesAndResources).dependsOn((Test / compile)).value,
-    (Jmh / run / mainClass) := Some("org.openjdk.jmh.Main"),
-    (Test / parallelExecution) := false,
-    mimaPreviousArtifacts := Set.empty
+    (Jmh / classDirectory)                 := (Test / classDirectory).value,
+    (Jmh / dependencyClasspath)            := (Test / dependencyClasspath).value,
+    (Jmh / generateJmhSourcesAndResources) := (Jmh / generateJmhSourcesAndResources).dependsOn(Test / compile).value,
+    (Jmh / run / mainClass)                := Some("org.openjdk.jmh.Main"),
+    (Test / parallelExecution)             := false,
+    mimaPreviousArtifacts                  := Set.empty
   )
   .dependsOn(
     PlayProject                % "test->test",
     PlayLogback                % "test->test",
-    PlayIntegrationTestProject % "test->it",
+    PlayIntegrationTestProject % "test->test",
     PlayAhcWsProject,
     PlaySpecs2Project,
     PlayFiltersHelpersProject,
     PlayJavaProject,
     PlayNettyServerProject,
-    PlayAkkaHttpServerProject,
-    PlayAkkaHttp2SupportProject
+    PlayPekkoHttpServerProject,
+    PlayPekkoHttp2SupportProject
   )
 
 lazy val PlayCacheProject = PlayCrossBuiltProject("Play-Cache", "cache/play-cache")
@@ -420,10 +442,10 @@ lazy val PlayDocsSbtPlugin = PlaySbtPluginProject("Play-Docs-Sbt-Plugin", "dev-m
 lazy val userProjects = Seq[ProjectReference](
   PlayProject,
   PlayGuiceProject,
-  BuildLinkProject,
-  RoutesCompilerProject,
-  PlayAkkaHttpServerProject,
-  PlayAkkaHttp2SupportProject,
+  PlayBuildLinkProject,
+  PlayRoutesCompilerProject,
+  PlayPekkoHttpServerProject,
+  PlayPekkoHttp2SupportProject,
   PlayArmeriaServerProject,
   PlayCacheProject,
   PlayEhcacheProject,
@@ -440,6 +462,7 @@ lazy val userProjects = Seq[ProjectReference](
   PlayNettyServerProject,
   PlayServerProject,
   PlayLogback,
+  PlayConfiguration,
   PlayWsProject,
   PlayAhcWsProject,
   PlayOpenIdProject,
@@ -447,7 +470,7 @@ lazy val userProjects = Seq[ProjectReference](
   PlayTestProject,
   PlayExceptionsProject,
   PlayFiltersHelpersProject,
-  StreamsProject,
+  PlayStreamsProject,
   PlayClusterSharding,
   PlayJavaClusterSharding
 )
@@ -456,44 +479,50 @@ lazy val nonUserProjects = Seq[ProjectReference](
   PlayDocsProject,
   PlayIntegrationTestProject,
   PlayDocsSbtPlugin,
-  RunSupportProject,
+  PlayRunSupportProject,
   SbtRoutesCompilerProject,
   SbtPluginProject,
   SbtScriptedToolsProject,
-  billOfMaterials
+  PlayBillOfMaterials
 )
 
 lazy val PlayFramework = Project("Play-Framework", file("."))
   .enablePlugins(PlayRootProject)
   .settings(
     playCommonSettings,
-    scalaVersion := (PlayProject / scalaVersion).value,
-    crossScalaVersions := Nil,
+    scalaVersion                    := (PlayProject / scalaVersion).value,
+    crossScalaVersions              := Nil,
     (ThisBuild / playBuildRepoName) := "playframework",
     (Global / concurrentRestrictions) += Tags.limit(Tags.Test, 1),
     libraryDependencies ++= (runtime(scalaVersion.value) ++ jdbcDeps),
-    Docs.apiDocsInclude := false,
+    Docs.apiDocsInclude        := false,
     Docs.apiDocsIncludeManaged := false,
-    mimaReportBinaryIssues := (()),
+    mimaReportBinaryIssues     := (()),
     commands += Commands.quickPublish,
     publish / skip := true,
     (Compile / headerSources) ++=
       ((baseDirectory.value ** ("*.default" || "*.properties" || "*.md" || "*.sbt" || "*.routes" || "routes" || "*.js" || "*.less"))
-        --- (baseDirectory.value ** ("jquery*js"))
+        --- (baseDirectory.value ** "jquery*js")
         --- (baseDirectory.value ** "target" ** "*")
+        --- (baseDirectory.value ** "gradle-plugin" ** "*") // Gradle Spotless plugin is used
+        --- (baseDirectory.value / "version.properties")
         --- (baseDirectory.value / "documentation" ** "*")).get ++
-        (baseDirectory.value / "web" / "play-openid" ** "*.html").get ++
+        (baseDirectory.value / "web" / "play-openid" ** "*.html" --- (baseDirectory.value ** "target" ** "*")).get ++
         (baseDirectory.value / "project" ** "*.scala" --- (baseDirectory.value ** "target" ** "*")).get
   )
   .aggregate((userProjects ++ nonUserProjects): _*)
 
-addCommandAlias(
-  "validateCode",
-  List(
-    "headerCheckAll",
-    "scalafmtSbtCheck",
-    "scalafmtCheckAll",
-    "javafmtCheckAll",
-    "+checkAkkaModuleVersions"
-  ).mkString(";")
-)
+//val _ = sys.props += ("sbt_validateCode" -> List(
+//  "+checkPekkoModuleVersions", // TODO: See https://github.com/playframework/playframework/issues/11986
+//).mkString(";"))
+
+lazy val savePlayVersion = taskKey[Unit]("Save Play version")
+savePlayVersion := {
+  val props  = new Properties()
+  val writer = new StringWriter()
+  val file   = baseDirectory.value / "version.properties"
+  props.setProperty("play.version", version.value)
+  props.store(writer, "")
+  IO.write(file, writer.getBuffer.toString)
+  Seq(file)
+}

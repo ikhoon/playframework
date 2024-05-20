@@ -5,23 +5,23 @@
 package play.core.server
 
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
+
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigMemorySize
 import com.typesafe.config.ConfigValue
-import com.typesafe.netty.HandlerPublisher
-import com.typesafe.netty.http.HttpStreamsServerHandler
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel._
 import io.netty.channel.epoll.EpollChannelOption
 import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.epoll.EpollServerSocketChannel
+import io.netty.channel.group.ChannelMatchers
 import io.netty.channel.group.DefaultChannelGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
@@ -31,21 +31,23 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslHandler
 import io.netty.handler.timeout.IdleStateHandler
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.Done
+import org.playframework.netty.http.HttpStreamsServerHandler
+import org.playframework.netty.HandlerPublisher
 import play.api._
 import play.api.http.HttpProtocol
 import play.api.internal.libs.concurrent.CoordinatedShutdownSupport
 import play.api.routing.Router
 import play.core._
-import play.core.server.Server.ServerStoppedReason
 import play.core.server.netty._
 import play.core.server.ssl.ServerSSLEngine
+import play.core.server.Server.ServerStoppedReason
 import play.server.SSLEngineProvider
-
-import scala.jdk.CollectionConverters._
-import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.util.control.NonFatal
 
 sealed trait NettyTransport
 case object Jdk    extends NettyTransport
@@ -57,12 +59,11 @@ case object Native extends NettyTransport
 class NettyServer(
     config: ServerConfig,
     val applicationProvider: ApplicationProvider,
-    stopHook: () => Future[_],
+    stopHook: () => Future[?],
     val actorSystem: ActorSystem
 )(implicit val materializer: Materializer)
     extends Server {
   initializeChannelOptionsStaticMembers()
-  registerShutdownTasks()
 
   private val serverConfig         = config.configuration.get[Configuration]("play.server")
   private val nettyConfig          = serverConfig.get[Configuration]("netty")
@@ -80,15 +81,22 @@ class NettyServer(
   private val httpsNeedClientAuth = serverConfig.get[Boolean]("https.needClientAuth")
   private val httpIdleTimeout     = serverConfig.get[Duration]("http.idleTimeout")
   private val httpsIdleTimeout    = serverConfig.get[Duration]("https.idleTimeout")
+  private val shutdownQuietPeriod = nettyConfig.get[FiniteDuration]("shutdownQuietPeriod")
+  private val terminationDelay    = serverConfig.get[FiniteDuration]("waitBeforeTermination")
+  private val terminationTimeout  = serverConfig.getOptional[FiniteDuration]("terminationTimeout")
   private val wsBufferLimit       = serverConfig.get[ConfigMemorySize]("websocket.frame.maxLength").toBytes.toInt
   private val wsKeepAliveMode     = serverConfig.get[String]("websocket.periodic-keep-alive-mode")
   private val wsKeepAliveMaxIdle  = serverConfig.get[Duration]("websocket.periodic-keep-alive-max-idle")
+  private val deferBodyParsing    = serverConfig.underlying.getBoolean("deferBodyParsing")
 
   private lazy val transport = nettyConfig.get[String]("transport") match {
     case "native" => Native
     case "jdk"    => Jdk
     case _        => throw ServerStartException("Netty transport configuration value should be either jdk or native")
   }
+
+  // The shutdown tasks depend on above configs, so we can only register them after the configs got initialized
+  registerShutdownTasks()
 
   import NettyServer._
 
@@ -135,10 +143,10 @@ class NettyServer(
       val cleanKey = option.getKey.stripPrefix("\"").stripSuffix("\"")
       if (ChannelOption.exists(cleanKey)) {
         logger.debug(s"Setting Netty channel option ${cleanKey} to ${unwrap(option.getValue)}${if (bootstrapping) {
-          " at bootstrapping"
-        } else {
-          ""
-        }}")
+            " at bootstrapping"
+          } else {
+            ""
+          }}")
         setOption(ChannelOption.valueOf(cleanKey), unwrap(option.getValue))
       } else {
         logger.warn("Ignoring unknown Netty channel option: " + cleanKey)
@@ -159,7 +167,7 @@ class NettyServer(
   /**
    * Bind to the given address, returning the server channel, and a stream of incoming connection channels.
    */
-  private def bind(address: InetSocketAddress): (Channel, Source[Channel, _]) = {
+  private def bind(address: InetSocketAddress): (Channel, Source[Channel, ?]) = {
     val serverChannelEventLoop = eventLoop.next
 
     // Watches for channel events, and pushes them through a reactive streams publisher.
@@ -189,7 +197,15 @@ class NettyServer(
    * Create a new PlayRequestHandler.
    */
   protected[this] def newRequestHandler(): ChannelInboundHandler =
-    new PlayRequestHandler(this, serverHeader, maxContentLength, wsBufferLimit, wsKeepAliveMode, wsKeepAliveMaxIdle)
+    new PlayRequestHandler(
+      this,
+      serverHeader,
+      maxContentLength,
+      wsBufferLimit,
+      wsKeepAliveMode,
+      wsKeepAliveMaxIdle,
+      deferBodyParsing
+    )
 
   /**
    * Create a sink for the incoming connection channels.
@@ -288,13 +304,48 @@ class NettyServer(
       Future.successful(Done)
     }
 
+    val serverTerminateTimeout =
+      Server.determineServerTerminateTimeout(terminationTimeout, terminationDelay)(actorSystem)
+
     val unbindTimeout = cs.timeout(CoordinatedShutdown.PhaseServiceUnbind)
     cs.addTask(CoordinatedShutdown.PhaseServiceUnbind, "netty-server-unbind") { () =>
-      // First, close all opened sockets
-      allChannels.close().awaitUninterruptibly(unbindTimeout.toMillis - 100)
-      // Now shutdown the event loop
-      eventLoop.shutdownGracefully().await(unbindTimeout.toMillis - 100)
+      val serverChannelGroupFuture = allChannels.close(ChannelMatchers.isServerChannel) // vs. isNonServerChannel
+      val serverChannelIterator    = serverChannelGroupFuture.iterator()
+      while (serverChannelIterator.hasNext) {
+        val localAddress = serverChannelIterator.next().channel().localAddress()
+        logger.info(s"Closing server channel ${localAddress}")
+      }
+      serverChannelGroupFuture.awaitUninterruptibly(unbindTimeout.toMillis - 100)
       Future.successful(Done)
+    }
+
+    val serviceRequestsDoneTimeout = cs.timeout(CoordinatedShutdown.PhaseServiceRequestsDone)
+    cs.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "netty-server-terminate") { () =>
+      // First, close all remaining open sockets
+      val nonServerChannelGroupFuture = allChannels.close(ChannelMatchers.isNonServerChannel) // vs. isServerChannel
+      val nonServerChannelIterator    = nonServerChannelGroupFuture.iterator()
+      while (nonServerChannelIterator.hasNext) {
+        val localAddress = nonServerChannelIterator.next().channel().localAddress()
+        logger.info(s"Closing (non server) channel ${localAddress}")
+      }
+
+      val startTime = System.currentTimeMillis()
+      nonServerChannelGroupFuture.awaitUninterruptibly(serviceRequestsDoneTimeout.toMillis - 100)
+      val elapsedTime                         = System.currentTimeMillis() - startTime
+      val remainingServiceRequestsDoneTimeout = serviceRequestsDoneTimeout.toMillis - elapsedTime
+      val remainingServerTerminateTimeout     = serverTerminateTimeout.toMillis - elapsedTime
+      org.apache.pekko.pattern
+        .after(terminationDelay)(Future {
+          logger.info("Shutting down event loop")
+          eventLoop
+            .shutdownGracefully(
+              shutdownQuietPeriod.toMillis,
+              remainingServerTerminateTimeout - 100,
+              TimeUnit.MILLISECONDS
+            )
+            .awaitUninterruptibly(remainingServiceRequestsDoneTimeout - 100)
+        })(actorSystem)
+        .map(_ => Done)
     }
 
     // Call provided hook
@@ -323,8 +374,8 @@ class NettyServer(
     // (But not when setting it into the "child" sub-path!)
 
     // How to force a class to get initialized:
-    // https://docs.oracle.com/javase/specs/jls/se8/html/jls-12.html#jls-12.4.1
-    Seq(classOf[ChannelOption[_]], classOf[UnixChannelOption[_]], classOf[EpollChannelOption[_]]).foreach(clazz => {
+    // https://docs.oracle.com/javase/specs/jls/se17/html/jls-12.html#jls-12.4.1
+    Seq(classOf[ChannelOption[?]], classOf[UnixChannelOption[?]], classOf[EpollChannelOption[?]]).foreach(clazz => {
       logger.debug(s"Class ${clazz.getName} will be initialized (if it hasn't been initialized already)")
       Class.forName(clazz.getName)
     })
@@ -369,7 +420,7 @@ class NettyServer(
  * The Netty server provider
  */
 class NettyServerProvider extends ServerProvider {
-  def createServer(context: ServerProvider.Context) =
+  def createServer(context: ServerProvider.Context): Server =
     new NettyServer(
       context.config,
       context.appProvider,

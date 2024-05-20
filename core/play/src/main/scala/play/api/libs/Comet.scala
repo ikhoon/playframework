@@ -4,18 +4,18 @@
 
 package play.api.libs
 
-import akka.NotUsed
-import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import akka.util.ByteStringBuilder
-import play.twirl.api.utils.StringEscapeUtils
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.util.ByteStringBuilder
+import org.apache.pekko.NotUsed
 import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import play.twirl.api._
+import play.twirl.api.utils.StringEscapeUtils
 
 /**
- * Helper function to produce a Comet using <a href="http://doc.akka.io/docs/akka/2.6/scala/stream/index.html">Akka Streams</a>.
+ * Helper function to produce a Comet using <a href="https://pekko.apache.org/docs/pekko/1.0/stream/index.html">Pekko Streams</a>.
  *
  * Please see <a href="https://en.wikipedia.org/wiki/Comet_(programming)">https://en.wikipedia.org/wiki/Comet_(programming)</a>
  * for details of Comet.
@@ -30,7 +30,6 @@ import play.twirl.api._
  *     Ok.chunked(source via Comet.flow("parent.clockChanged"))
  *   }
  * }}}
- *
  */
 object Comet {
   val initialHtmlChunk = Html(Array.fill[Char](5 * 1024)(' ').mkString + "<html><body>")
@@ -44,10 +43,20 @@ object Comet {
    * @param callbackName the javascript callback method.
    * @return a flow of ByteString elements.
    */
-  def string(callbackName: String): Flow[String, ByteString, NotUsed] = {
+  def string(callbackName: String): Flow[String, ByteString, NotUsed] = string(callbackName, "")
+
+  /**
+   * Produces a Flow of escaped ByteString from a series of String elements.  Calls
+   * out to Comet.flow internally.
+   *
+   * @param callbackName the javascript callback method.
+   * @param nonce The CSP nonce to use for the script tag. If null no nonce will be sent.
+   * @return a flow of ByteString elements.
+   */
+  def string(callbackName: String, nonce: String): Flow[String, ByteString, NotUsed] = {
     Flow[String]
       .map(str => ByteString.fromString("'" + StringEscapeUtils.escapeEcmaScript(str) + "'"))
-      .via(flow(callbackName))
+      .via(flow(callbackName, nonce = nonce))
   }
 
   /**
@@ -57,10 +66,20 @@ object Comet {
    * @param callbackName the javascript callback method.
    * @return a flow of ByteString elements.
    */
-  def json(callbackName: String): Flow[JsValue, ByteString, NotUsed] = {
+  def json(callbackName: String): Flow[JsValue, ByteString, NotUsed] = json(callbackName, "")
+
+  /**
+   * Produces a flow of ByteString using `Json.fromJson(_).get` from a Flow of JsValue.  Calls
+   * out to Comet.flow internally.
+   *
+   * @param callbackName the javascript callback method.
+   * @param nonce The CSP nonce to use for the script tag. If null no nonce will be sent.
+   * @return a flow of ByteString elements.
+   */
+  def json(callbackName: String, nonce: String): Flow[JsValue, ByteString, NotUsed] = {
     Flow[JsValue]
       .map { msg => ByteString.fromString(Json.asciiStringify(msg)) }
-      .via(flow(callbackName))
+      .via(flow(callbackName, nonce = nonce))
   }
 
   /**
@@ -79,15 +98,41 @@ object Comet {
    */
   def flow(
       callbackName: String,
-      initialChunk: ByteString = initialByteString
+      initialChunk: ByteString
+  ): Flow[ByteString, ByteString, NotUsed] = flow(callbackName, initialChunk, "")
+
+  /**
+   * Creates a flow of ByteString.  Useful when you have objects that are not JSON or String where
+   * you may have to do your own conversion.
+   *
+   * Usage example:
+   *
+   * {{{
+   *   val htmlStream: Source[ByteString, ByteString, NotUsed] = Flow[Html].map { html =>
+   *     ByteString.fromString(html.toString())
+   *   }
+   *   ...
+   *   Ok.chunked(htmlStream via Comet.flow("parent.clockChanged"))
+   * }}}
+   */
+  def flow(
+      callbackName: String,
+      initialChunk: ByteString = initialByteString,
+      nonce: String = ""
   ): Flow[ByteString, ByteString, NotUsed] = {
     val cb: ByteString = ByteString.fromString(callbackName)
-    Flow.apply[ByteString].map(msg => formatted(cb, msg)).prepend(Source.single(initialChunk))
+    Flow.apply[ByteString].map(msg => formatted(cb, msg, nonce)).prepend(Source.single(initialChunk))
   }
 
-  private def formatted(callbackName: ByteString, javascriptMessage: ByteString): ByteString = {
+  private def formatted(callbackName: ByteString, javascriptMessage: ByteString, nonce: String = ""): ByteString = {
     val b: ByteStringBuilder = new ByteStringBuilder
-    b.append(ByteString.fromString("""<script>"""))
+    b.append(ByteString.fromString("""<script"""))
+    if (nonce != null && nonce.nonEmpty) {
+      b.append(ByteString.fromString(""" nonce=""""))
+      b.append(ByteString.fromString(nonce))
+      b.append(ByteString.fromString("""""""))
+    }
+    b.append(ByteString.fromString(""">"""))
     b.append(callbackName)
     b.append(ByteString.fromString("("))
     b.append(javascriptMessage)

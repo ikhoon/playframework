@@ -4,7 +4,6 @@
 
 package play.api.routing.sird
 
-import java.net.URL
 import java.net.URI
 
 import org.specs2.mutable.Specification
@@ -86,13 +85,13 @@ class UrlContextSpec extends Specification {
     "match a path with a nested extractor" in {
       "match" in {
         "/foo/1234/bar" must beLike {
-          case p"/foo/${int(id) }/bar" => id must_== 1234L
+          case p"/foo/${int(id)}/bar" => id must_== 1234L
         }
       }
       "no match" in {
         "/foo/testing/bar" must beLike {
-          case p"/foo/${int(id) }/bar" => ko
-          case _                       => ok
+          case p"/foo/${int(id)}/bar" => ko
+          case _                      => ok
         }
       }
     }
@@ -110,7 +109,7 @@ class UrlContextSpec extends Specification {
     }
 
     "match a url" in {
-      new URL("http://example.com/foo/testing/bar") must beLike {
+      new URI("http://example.com/foo/testing/bar").toURL must beLike {
         case p"/foo/$id/bar" => id must_== "testing"
       }
     }
@@ -118,7 +117,7 @@ class UrlContextSpec extends Specification {
 
   "query string interpolation" should {
     def qs(params: (String, String)*): Map[String, Seq[String]] = {
-      params.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
+      params.groupMap(_._1)(_._2)
     }
 
     "allow required parameter extraction" in {

@@ -13,7 +13,7 @@ public interface CSRFComponents
         CryptoComponents,
         HttpConfigurationComponents,
         HttpErrorHandlerComponents,
-        AkkaComponents {
+        PekkoComponents {
 
   default CSRFConfig csrfConfig() {
     return CSRFConfig$.MODULE$.fromConfiguration(configuration());
@@ -53,7 +53,8 @@ public interface CSRFComponents
   }
 
   default CSRFCheck csrfCheck() {
-    return new CSRFCheck(csrfConfig(), csrfTokenSigner().asScala(), sessionConfiguration());
+    return new CSRFCheck(
+        csrfConfig(), csrfTokenSigner(), sessionConfiguration(), csrfErrorHandler());
   }
 
   default CSRFAddToken csrfAddToken() {

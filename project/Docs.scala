@@ -2,22 +2,22 @@
  * Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
+import java.net.URLClassLoader
+import java.util.Optional
+
 import sbt._
-import sbt.internal.BuildStructure
-import sbt.Keys._
-import sbt.File
-import sbt.util.CacheStoreFactory
 import sbt.internal.inc.AnalyzingCompiler
 import sbt.internal.inc.LoggedReporter
 import sbt.internal.inc.PlainVirtualFile
 import sbt.internal.inc.PlainVirtualFileConverter
-import java.net.URLClassLoader
-import java.util.Optional
+import sbt.internal.BuildStructure
+import sbt.io.Path._
+import sbt.util.CacheStoreFactory
+import sbt.Keys._
+
 import org.webjars.WebJarExtractor
 import xsbti.compile._
-import sbt.io.Path._
-import interplay.Playdoc
-import interplay.Playdoc.autoImport._
+import Playdoc.autoImport.playdocPackage
 
 object Docs {
   val Webjars = config("webjars").hide
@@ -33,7 +33,7 @@ object Docs {
   val allConfs            = taskKey[Seq[(String, File)]]("Gather all configuration files")
 
   lazy val settings = Seq(
-    apiDocsInclude := false,
+    apiDocsInclude        := false,
     apiDocsIncludeManaged := false,
     apiDocsScalaSources := Def.taskDyn {
       val pr = thisProjectRef.value
@@ -81,7 +81,7 @@ object Docs {
     }
   )
 
-  def playdocSettings: Seq[Setting[_]] = Def.settings(
+  def playdocSettings: Seq[Setting[?]] = Def.settings(
     Playdoc.projectSettings,
     ivyConfigurations += Webjars,
     extractWebjars := extractWebjarContents.value,
@@ -125,8 +125,9 @@ object Docs {
     val version = Keys.version.value
     val label   = s"Play $version"
 
-    val commitish   = if (version.endsWith("-SNAPSHOT")) BuildSettings.snapshotBranch else version
-    val externalDoc = Opts.doc.externalAPI(apiMappings.value).head.replace("-doc-external-doc:", "") // from the "doc" task
+    val commitish = if (version.endsWith("-SNAPSHOT")) BuildSettings.snapshotBranch else version
+    val externalDoc =
+      Opts.doc.externalAPI(apiMappings.value).head.replace("-doc-external-doc:", "") // from the "doc" task
 
     val options = Seq(
       // Note, this is used by the doc-source-url feature to determine the relative path of a given source file.
@@ -159,23 +160,24 @@ object Docs {
     val options = List(
       "-windowtitle",
       label,
-      // Adding a user agent when we run `javadoc` is necessary to create link docs
+      // Adding a user agent when we run `javadoc` was necessary to create link docs
       // with Akka (at least, maybe play too) because doc.akka.io is served by Cloudflare
       // which blocks requests without a User-Agent header.
+      // Not sure we need that for Pekko however.
       "-J-Dhttp.agent=Play-Unidoc-Javadoc",
       "-link",
-      "https://docs.oracle.com/javase/8/docs/api/",
+      "https://docs.oracle.com/en/java/javase/17/docs/api/",
       "-link",
-      "https://doc.akka.io/japi/akka/2.6/",
+      "https://pekko.apache.org/japi/pekko/1.0/",
       "-link",
-      "https://doc.akka.io/japi/akka-http/current/",
+      "https://pekko.apache.org/japi/pekko-http/1.0/",
       "-notimestamp",
       "-Xmaxwarns",
       "1000",
       "-exclude",
       "play.api:play.core",
       "-source",
-      "11"
+      "17"
     )
 
     val cache     = apiDocsCache("javaapidocs.cache").value
@@ -228,7 +230,7 @@ object Docs {
 
     // Maps to Javadoc references in Scaladoc, and fixes the link so that it uses query parameters in
     // Javadoc style to link directly to the referenced class.
-    // http://stackoverflow.com/questions/16934488/how-to-link-classes-from-jdk-into-scaladoc-generated-doc/
+    // https://stackoverflow.com/questions/16934488/how-to-link-classes-from-jdk-into-scaladoc-generated-doc/
     (apiTarget ** "*.html").get.filter(hasJavadocLink).foreach { f =>
       val newContent: String = externalJavadocLinks.foldLeft(IO.read(f)) {
         case (oldContent: String, javadocURL: String) =>
@@ -249,12 +251,12 @@ object Docs {
     artifactToJavadoc(id.organization, id.name, id.revision, s"${id.name}-${id.revision}")
   }
 
-  val javaApiUrl     = "http://docs.oracle.com/javase/8/docs/api/index.html"
+  val javaApiUrl     = "https://docs.oracle.com/en/java/javase/17/docs/api/index.html"
   val javaxInjectUrl = "https://javax-inject.github.io/javax-inject/api/index.html"
   // ehcache has 2.6.11 as version, but latest is only 2.6.9 on the site!
-  val ehCacheUrl = raw"http://www.ehcache.org/apidocs/2.6.9/index.html"
+  val ehCacheUrl = raw"https://www.ehcache.org/apidocs/2.6.9/index.html"
   // nonstandard guice location
-  val guiceUrl = raw"http://google.github.io/guice/api-docs/${Dependencies.guiceVersion}/javadoc/index.html"
+  val guiceUrl = raw"https://google.github.io/guice/api-docs/${Dependencies.guiceVersion}/javadoc/index.html"
 
   def allConfsTask(projectRef: ProjectRef, structure: BuildStructure): Task[Seq[(String, File)]] = {
     val projects = allApiProjects(projectRef.build, structure)

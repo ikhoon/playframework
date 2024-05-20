@@ -4,8 +4,7 @@
 
 package play.api.test
 
-import akka.annotation.ApiMayChange
-
+import org.apache.pekko.annotation.ApiMayChange
 import play.api.Application
 import play.core.server.ServerEndpoints
 

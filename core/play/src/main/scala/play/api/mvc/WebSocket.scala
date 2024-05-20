@@ -4,19 +4,17 @@
 
 package play.api.mvc
 
-import akka.stream.scaladsl.Flow
-import akka.util.ByteString
+import scala.concurrent.Future
+import scala.util.control.NonFatal
+
+import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.Props
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.util.ByteString
 import play.api.http.websocket._
 import play.api.libs.json._
-import play.api.libs.streams.AkkaStreams
+import play.api.libs.streams.PekkoStreams
 import play.core.Execution.Implicits.trampoline
-
-import scala.concurrent.Future
-
-import akka.actor.Props
-import akka.actor.ActorRef
-
-import scala.util.control.NonFatal
 
 /**
  * A WebSocket handler.
@@ -29,14 +27,14 @@ trait WebSocket extends Handler {
    * The return value is either a result to reject the WebSocket with (or otherwise respond in a different way), or
    * a flow to handle the WebSocket messages.
    */
-  def apply(request: RequestHeader): Future[Either[Result, Flow[Message, Message, _]]]
+  def apply(request: RequestHeader): Future[Either[Result, Flow[Message, Message, ?]]]
 }
 
 /**
  * Helper utilities to generate WebSocket results.
  */
 object WebSocket {
-  def apply(f: RequestHeader => Future[Either[Result, Flow[Message, Message, _]]]): WebSocket = {
+  def apply(f: RequestHeader => Future[Either[Result, Flow[Message, Message, ?]]]): WebSocket = {
     (request: RequestHeader) => f(request)
   }
 
@@ -51,12 +49,12 @@ object WebSocket {
     /**
      * Transform the flow of In/Out messages into a flow of WebSocket messages.
      */
-    def transform(flow: Flow[In, Out, _]): Flow[Message, Message, _]
+    def transform(flow: Flow[In, Out, ?]): Flow[Message, Message, ?]
 
     /**
      * Contramap the out type of this transformer.
      */
-    def contramap[NewOut](f: NewOut => Out): MessageFlowTransformer[In, NewOut] = { (flow: Flow[In, NewOut, _]) =>
+    def contramap[NewOut](f: NewOut => Out): MessageFlowTransformer[In, NewOut] = { (flow: Flow[In, NewOut, ?]) =>
       self.transform(
         flow.map(f)
       )
@@ -65,7 +63,7 @@ object WebSocket {
     /**
      * Map the in type of this transformer.
      */
-    def map[NewIn](f: In => NewIn): MessageFlowTransformer[NewIn, Out] = { (flow: Flow[NewIn, Out, _]) =>
+    def map[NewIn](f: In => NewIn): MessageFlowTransformer[NewIn, Out] = { (flow: Flow[NewIn, Out, ?]) =>
       self.transform(
         Flow[In].map(f).via(flow)
       )
@@ -75,7 +73,7 @@ object WebSocket {
      * Map the in type and contramap the out type of this transformer.
      */
     def map[NewIn, NewOut](f: In => NewIn, g: NewOut => Out): MessageFlowTransformer[NewIn, NewOut] = {
-      (flow: Flow[NewIn, NewOut, _]) =>
+      (flow: Flow[NewIn, NewOut, ?]) =>
         {
           self.transform(
             Flow[In].map(f).via(flow).map(g)
@@ -86,16 +84,16 @@ object WebSocket {
 
   object MessageFlowTransformer {
     implicit val identityMessageFlowTransformer: MessageFlowTransformer[Message, Message] = {
-      (flow: Flow[Message, Message, _]) => flow
+      (flow: Flow[Message, Message, ?]) => flow
     }
 
     /**
      * Converts text messages to/from Strings.
      */
     implicit val stringMessageFlowTransformer: MessageFlowTransformer[String, String] = {
-      (flow: Flow[String, String, _]) =>
+      (flow: Flow[String, String, ?]) =>
         {
-          AkkaStreams.bypassWith[Message, String, Message](Flow[Message].collect {
+          PekkoStreams.bypassWith[Message, String, Message](Flow[Message].collect {
             case TextMessage(text) => Left(text)
             case BinaryMessage(_) =>
               Right(CloseMessage(Some(CloseCodes.Unacceptable), "This WebSocket only supports text frames"))
@@ -107,9 +105,9 @@ object WebSocket {
      * Converts binary messages to/from ByteStrings.
      */
     implicit val byteStringMessageFlowTransformer: MessageFlowTransformer[ByteString, ByteString] = {
-      (flow: Flow[ByteString, ByteString, _]) =>
+      (flow: Flow[ByteString, ByteString, ?]) =>
         {
-          AkkaStreams.bypassWith[Message, ByteString, Message](Flow[Message].collect {
+          PekkoStreams.bypassWith[Message, ByteString, Message](Flow[Message].collect {
             case BinaryMessage(data) => Left(data)
             case TextMessage(_) =>
               Right(CloseMessage(Some(CloseCodes.Unacceptable), "This WebSocket only supports binary frames"))
@@ -135,8 +133,8 @@ object WebSocket {
           case NonFatal(e) => Right(CloseMessage(Some(CloseCodes.Unacceptable), "Unable to parse json message"))
         }
 
-      (flow: Flow[JsValue, JsValue, _]) => {
-        AkkaStreams.bypassWith[Message, JsValue, Message](Flow[Message].collect {
+      (flow: Flow[JsValue, JsValue, ?]) => {
+        PekkoStreams.bypassWith[Message, JsValue, Message](Flow[Message].collect {
           case BinaryMessage(data) => closeOnException(Json.parse(data.iterator.asInputStream))
           case TextMessage(text)   => closeOnException(Json.parse(text))
         })(flow.map { json => TextMessage(Json.stringify(json)) })
@@ -154,11 +152,14 @@ object WebSocket {
         json =>
           Json
             .fromJson[In](json)
-            .fold({ errors =>
-              throw WebSocketCloseException(
-                CloseMessage(Some(CloseCodes.Unacceptable), Json.stringify(JsError.toJson(errors)))
-              )
-            }, identity),
+            .fold(
+              { errors =>
+                throw WebSocketCloseException(
+                  CloseMessage(Some(CloseCodes.Unacceptable), Json.stringify(JsError.toJson(errors)))
+                )
+              },
+              identity
+            ),
         out => Json.toJson(out)
       )
     }
@@ -168,7 +169,7 @@ object WebSocket {
    * Accepts a WebSocket using the given flow.
    */
   def accept[In, Out](
-      f: RequestHeader => Flow[In, Out, _]
+      f: RequestHeader => Flow[In, Out, ?]
   )(implicit transformer: MessageFlowTransformer[In, Out]): WebSocket = {
     acceptOrResult(f.andThen(flow => Future.successful(Right(flow))))
   }
@@ -178,7 +179,7 @@ object WebSocket {
    * return a result to reject the Websocket.
    */
   def acceptOrResult[In, Out](
-      f: RequestHeader => Future[Either[Result, Flow[In, Out, _]]]
+      f: RequestHeader => Future[Either[Result, Flow[In, Out, ?]]]
   )(implicit transformer: MessageFlowTransformer[In, Out]): WebSocket = {
     WebSocket { request => f(request).map(_.map(transformer.transform)) }
   }

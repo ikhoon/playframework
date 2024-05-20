@@ -4,22 +4,26 @@
 
 package play.api.test
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.language.reflectiveCalls
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
 import org.specs2.mutable._
-import play.api.mvc.Results._
 import play.api.mvc._
+import play.api.mvc.Results._
 import play.api.test.Helpers._
 import play.twirl.api.Content
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.language.reflectiveCalls
-
 class HelpersSpec extends Specification {
-  val ctrl = new ControllerHelpers {
+
+  sequential // needed because we read/write sys.props in differents tests below
+
+  val ctrl = new HelpersTest
+  class HelpersTest extends ControllerHelpers {
     lazy val Action: ActionBuilder[Request, AnyContent] = ActionBuilder.ignoringBody
     def abcAction: EssentialAction = Action {
       Ok("abc").as("text/plain")
@@ -33,7 +37,7 @@ class HelpersSpec extends Specification {
     "change database with a name argument" in {
       val inMemoryDatabaseConfiguration = inMemoryDatabase("test")
       inMemoryDatabaseConfiguration.get("db.test.driver") must beSome("org.h2.Driver")
-      inMemoryDatabaseConfiguration.get("db.test.url") must beSome.which { url =>
+      inMemoryDatabaseConfiguration.get("db.test.url") must beSome[String].which { url =>
         url.startsWith("jdbc:h2:mem:play-test-")
       }
     }
@@ -42,7 +46,7 @@ class HelpersSpec extends Specification {
       val inMemoryDatabaseConfiguration =
         inMemoryDatabase("test", Map("MODE" -> "PostgreSQL", "DB_CLOSE_DELAY" -> "-1"))
       inMemoryDatabaseConfiguration.get("db.test.driver") must beSome("org.h2.Driver")
-      inMemoryDatabaseConfiguration.get("db.test.url") must beSome.which { url =>
+      inMemoryDatabaseConfiguration.get("db.test.url") must beSome[String].which { url =>
         """^jdbc:h2:mem:play-test([0-9-]+);MODE=PostgreSQL;DB_CLOSE_DELAY=-1$""".r.findFirstIn(url).isDefined
       }
     }
@@ -133,12 +137,49 @@ class HelpersSpec extends Specification {
     }
   }
 
+  "redirectLocation" should {
+    "extract location for 308 Permanent Redirect" in {
+      redirectLocation(Future.successful(PermanentRedirect("/test"))) must beSome("/test")
+    }
+  }
+
+  def restoringSysProp[T](propName: String)(block: => T): T = {
+    val original = sys.props.get(propName)
+    try {
+      block
+    } finally {
+      original match {
+        case None      => sys.props -= propName
+        case Some(old) => sys.props += ((propName, old))
+      }
+    }
+  }
+
+  "testServerAddress" should {
+
+    "set to 0.0.0.0 by default" in {
+      val addr = restoringSysProp("testserver.address") {
+        sys.props -= "testserver.address"
+        Helpers.testServerAddress
+      }
+      addr mustEqual "0.0.0.0"
+    }
+
+    "be configurable with sys props" in {
+      val addr = restoringSysProp("testserver.address") {
+        sys.props += (("testserver.address", "1.2.3.4"))
+        Helpers.testServerAddress
+      }
+      addr mustEqual "1.2.3.4"
+    }
+  }
+
   "Fakes" in {
     "FakeRequest" should {
       "parse query strings" in {
         val request = FakeRequest("GET", "/uri?q1=1&q2=2", FakeHeaders(), AnyContentAsEmpty)
-        request.queryString.get("q1") must beSome.which(_.contains("1"))
-        request.queryString.get("q2") must beSome.which(_.contains("2"))
+        request.queryString.get("q1") must beSome(contain[String]("1"))
+        request.queryString.get("q2") must beSome(contain[String]("2"))
       }
 
       "return an empty map when there is no query string parameters" in {
@@ -153,6 +194,41 @@ class HelpersSpec extends Specification {
 
         result.get.map(result => result.header.status mustEqual 404)
       }
+
+      "successfully execute a GET request in an Application" in {
+        val request = FakeRequest(GET, "/abc")
+        val fakeApplication = Helpers.baseApplicationBuilder
+          .routes {
+            case (GET, "/abc") => ctrl.abcAction
+          }
+          .build()
+        val Some(result) = Helpers.route(fakeApplication, request)
+
+        Helpers.status(result) mustEqual OK
+      }
+
+      "successfully execute a GET request in a Router" in {
+        val request = FakeRequest(GET, "/abc")
+        val router = {
+          import play.api.routing.Router
+          import play.api.routing.sird._
+          Router.from {
+            case GET(p"/abc") => ctrl.abcAction
+          }
+        }
+
+        val Some(result) = {
+          implicit val system = ActorSystem()
+          try {
+            Helpers.route(router, request)
+          } finally {
+            system.terminate()
+          }
+        }
+
+        Helpers.status(result) mustEqual OK
+      }
     }
   }
+
 }

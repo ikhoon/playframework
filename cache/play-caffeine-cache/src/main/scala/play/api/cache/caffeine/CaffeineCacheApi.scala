@@ -5,32 +5,32 @@
 package play.api.cache.caffeine
 
 import java.util.concurrent.Executor
-
+import javax.cache.CacheException
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import javax.cache.CacheException
-import akka.Done
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import com.github.benmanes.caffeine.cache.Cache
-import com.google.common.primitives.Primitives
-import play.cache.caffeine.NamedCaffeineCache
-import play.api.cache._
-import play.api.inject._
-import play.api.Configuration
-import play.api.libs.streams.Execution.trampoline
-import play.cache.NamedCacheImpl
-import play.cache.SyncCacheApiAdapter
-import play.cache.{ AsyncCacheApi => JavaAsyncCacheApi }
-import play.cache.{ DefaultAsyncCacheApi => JavaDefaultAsyncCacheApi }
-import play.cache.{ SyncCacheApi => JavaSyncCacheApi }
 
-import scala.jdk.FutureConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.FutureConverters._
 import scala.reflect.ClassTag
+
+import com.github.benmanes.caffeine.cache.Cache
+import com.google.common.primitives.Primitives
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.Done
+import play.api.cache._
+import play.api.inject._
+import play.api.libs.streams.Execution.trampoline
+import play.api.Configuration
+import play.cache.{ AsyncCacheApi => JavaAsyncCacheApi }
+import play.cache.{ DefaultAsyncCacheApi => JavaDefaultAsyncCacheApi }
+import play.cache.{ SyncCacheApi => JavaSyncCacheApi }
+import play.cache.caffeine.NamedCaffeineCache
+import play.cache.NamedCacheImpl
+import play.cache.SyncCacheApiAdapter
 
 /**
  * CaffeineCache components for compile time injection
@@ -71,7 +71,7 @@ class CaffeineCacheModule
       }
 
       // bind wrapper classes
-      def wrapperBindings(cacheApiKey: BindingKey[AsyncCacheApi], namedCache: NamedCache): Seq[Binding[_]] = Seq(
+      def wrapperBindings(cacheApiKey: BindingKey[AsyncCacheApi], namedCache: NamedCache): Seq[Binding[?]] = Seq(
         bind[JavaAsyncCacheApi].qualifiedWith(namedCache).to(new NamedJavaAsyncCacheApiProvider(cacheApiKey)),
         bind[Cached].qualifiedWith(namedCache).to(new NamedCachedProvider(cacheApiKey)),
         bind[SyncCacheApi].qualifiedWith(namedCache).to(new NamedSyncCacheApiProvider(cacheApiKey)),
@@ -128,10 +128,13 @@ private[play] object NamedCaffeineCacheProvider {
       manager.getCache(name).asInstanceOf[NamedCaffeineCache[Any, Any]]
     } catch {
       case e: CacheException =>
-        throw new CaffeineCacheExistsException(s"""A CaffeineCache instance with name '$name' already exists.
-                                                  |
-                                                  |This usually indicates that multiple instances of a dependent component (e.g. a Play application) have been started at the same time.
-         """.stripMargin, e)
+        throw new CaffeineCacheExistsException(
+          s"""A CaffeineCache instance with name '$name' already exists.
+             |
+             |This usually indicates that multiple instances of a dependent component (e.g. a Play application) have been started at the same time.
+          """.stripMargin,
+          e
+        )
     }
 }
 

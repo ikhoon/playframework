@@ -13,23 +13,23 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
+import scala.concurrent.duration._
+import scala.concurrent.Await
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.Materializer
 import org.specs2.mutable._
-import play.api.http.HeaderNames._
 import play.api.http._
+import play.api.http.HeaderNames._
 import play.api.http.Status._
 import play.api.i18n._
-import play.api.Application
-import play.api.Play
 import play.api.libs.typedmap.TypedEntry
 import play.api.libs.typedmap.TypedKey
 import play.api.libs.typedmap.TypedMap
+import play.api.Application
+import play.api.Play
 import play.core.test._
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 class ResultsSpec extends Specification {
   import scala.concurrent.ExecutionContext.Implicits.global
@@ -86,7 +86,7 @@ class ResultsSpec extends Specification {
 
       headers.size must_== 2
       headers must havePair("Set-Cookie" -> "yes")
-      headers must havePair("X-YOP"      -> "2")
+      headers must havePair("X-YOP" -> "2")
     }
 
     "support date headers manipulation" in {
@@ -171,8 +171,8 @@ class ResultsSpec extends Specification {
     }
 
     "support clearing a language cookie using withoutLang" in withApplication { (app: Application) =>
-      implicit val messagesApi = app.injector.instanceOf[MessagesApi]
-      val cookie               = cookieHeaderEncoding.decodeSetCookieHeader(bake(Ok.clearingLang).header.headers("Set-Cookie")).head
+      implicit val messagesApi: MessagesApi = app.injector.instanceOf[MessagesApi]
+      val cookie                            = cookieHeaderEncoding.decodeSetCookieHeader(bake(Ok.clearingLang).header.headers("Set-Cookie")).head
       cookie.name must_== Play.langCookieName
       cookie.value must_== ""
     }
@@ -310,9 +310,12 @@ class ResultsSpec extends Specification {
       implicit val mat: Materializer   = Materializer.matFromSystem
       try {
         var fileSent = false
-        val res = Results.Ok.sendFile(file, onClose = () => {
-          fileSent = true
-        })
+        val res = Results.Ok.sendFile(
+          file,
+          onClose = () => {
+            fileSent = true
+          }
+        )
 
         // Actually we need to wait until the Stream completes
         Await.ready(res.body.dataStream.runWith(Sink.ignore), 60.seconds)
@@ -330,9 +333,12 @@ class ResultsSpec extends Specification {
       implicit val mat: Materializer   = Materializer.matFromSystem
       try {
         var fileSent = false
-        val res = Results.Ok.sendPath(file.toPath, onClose = () => {
-          fileSent = true
-        })
+        val res = Results.Ok.sendPath(
+          file.toPath,
+          onClose = () => {
+            fileSent = true
+          }
+        )
 
         // Actually we need to wait until the Stream completes
         Await.ready(res.body.dataStream.runWith(Sink.ignore), 60.seconds)
@@ -350,9 +356,12 @@ class ResultsSpec extends Specification {
       implicit val mat: Materializer   = Materializer.matFromSystem
       try {
         var fileSent = false
-        val res = Results.Ok.sendResource("multipart-form-data-file.txt", onClose = () => {
-          fileSent = true
-        })
+        val res = Results.Ok.sendResource(
+          "multipart-form-data-file.txt",
+          onClose = () => {
+            fileSent = true
+          }
+        )
 
         // Actually we need to wait until the Stream completes
         Await.ready(res.body.dataStream.runWith(Sink.ignore), 60.seconds)
@@ -501,6 +510,27 @@ class ResultsSpec extends Specification {
         val req = Results.Ok.withAttrs(TypedMap(x -> 3, y -> "hello")).removeAttr(x).removeAttr(y)
         req.attrs.get(x) must beNone
         req.attrs.get(y) must beNone
+      }
+      "can convert the result into a java result and keep the attributes" in {
+        val x = TypedKey[Int]("x")
+        Results.Ok.addAttr(x, 3).asJava.attrs().get(x.asJava) must_== 3
+      }
+      "keep current attributes when modifying result session" in {
+        val x = TypedKey[Int]("x")
+        Results.Ok.addAttr(x, 3).withSession("Foo" -> "Bar").attrs.get(x) must beSome(3)
+      }
+      "keep current attributes when modifying result headers" in {
+        val x = TypedKey[Int]("x")
+        Results.Ok.addAttr(x, 3).withHeaders("Foo" -> "Bar").attrs.get(x) must beSome(3)
+        Results.Ok.addAttr(x, 3).discardingHeader("Foo").attrs.get(x) must beSome(3)
+      }
+      "keep current attributes when modifying result flash" in {
+        val x = TypedKey[Int]("x")
+        Results.Ok.addAttr(x, 3).flashing("Foo" -> "Bar").attrs.get(x) must beSome(3)
+      }
+      "keep current attributes when modifying result content type" in {
+        val x = TypedKey[Int]("x")
+        Results.Ok.addAttr(x, 3).as(ContentTypes.TEXT).attrs.get(x) must beSome(3)
       }
     }
   }

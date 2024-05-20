@@ -4,23 +4,23 @@
 
 package play.api.inject.guice
 
-import akka.actor.ActorSystem
-import akka.actor.ClassicActorSystemProvider
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.Future
+
 import com.google.inject.AbstractModule
 import com.typesafe.config.Config
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.specs2.mutable.Specification
-import play.api.ApplicationLoader
-import play.api.Configuration
-import play.api.Environment
+import play.{ Environment => JavaEnvironment }
 import play.api.i18n.I18nModule
 import play.api.inject.BuiltinModule
 import play.api.inject.DefaultApplicationLifecycle
 import play.api.mvc.CookiesModule
-import play.{ Environment => JavaEnvironment }
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import play.api.ApplicationLoader
+import play.api.Configuration
+import play.api.Environment
 
 class GuiceApplicationLoaderSpec extends Specification {
   "GuiceApplicationLoader" should {
@@ -84,7 +84,7 @@ class GuiceApplicationLoaderSpec extends Specification {
   }
 
   def fakeContext: ApplicationLoader.Context = ApplicationLoader.Context.create(Environment.simple())
-  def fakeContextWithModule(module: Class[_ <: AbstractModule]): ApplicationLoader.Context = {
+  def fakeContextWithModule(module: Class[? <: AbstractModule]): ApplicationLoader.Context = {
     val f                       = fakeContext
     val c                       = f.initialConfiguration
     val newModules: Seq[String] = c.get[Seq[String]]("play.modules.enabled") :+ module.getName

@@ -6,8 +6,9 @@ package play.sbt
 
 import sbt._
 import sbt.Keys._
-import com.typesafe.sbt.packager.archetypes.JavaServerAppPackaging
+
 import com.typesafe.sbt.jse.SbtJsTask
+import com.typesafe.sbt.packager.archetypes.JavaServerAppPackaging
 import play.core.PlayVersion
 import play.sbt.routes.RoutesCompiler
 import play.sbt.PlayImport.PlayKeys
@@ -102,18 +103,18 @@ object PlayNettyServer extends AutoPlugin {
 }
 
 /**
- * This plugin enables the Play akka http server
+ * This plugin enables the Play pekko http server
  */
-object PlayAkkaHttpServer extends AutoPlugin {
+object PlayPekkoHttpServer extends AutoPlugin {
   override def requires        = PlayService
   override def trigger         = allRequirements
-  override def projectSettings = Seq(libraryDependencies += PlayImport.akkaHttpServer)
+  override def projectSettings = Seq(libraryDependencies += PlayImport.pekkoHttpServer)
 }
 
-object PlayAkkaHttp2Support extends AutoPlugin {
-  override def requires = PlayAkkaHttpServer
+object PlayPekkoHttp2Support extends AutoPlugin {
+  override def requires = PlayPekkoHttpServer
   override def projectSettings = Seq(
-    libraryDependencies += "com.typesafe.play" %% "play-akka-http2-support" % PlayVersion.current,
+    libraryDependencies += "org.playframework" %% "play-pekko-http2-support" % PlayVersion.current,
   )
 }
 

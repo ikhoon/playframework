@@ -5,12 +5,17 @@
 package play.filters.csrf
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import javax.inject.Inject
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import scala.concurrent.Future
+import scala.jdk.OptionConverters._
+import scala.language.postfixOps
+import scala.util.Random
+
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import org.specs2.specification.core.Fragment
-import play.api.ApplicationLoader.Context
 import play.api.http.HttpEntity
 import play.api.http.HttpErrorHandler
 import play.api.http.HttpFilters
@@ -18,24 +23,20 @@ import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.inject.guice.GuiceApplicationLoader
 import play.api.libs.json.Json
 import play.api.libs.ws._
-import play.api.mvc.Handler.Stage
 import play.api.mvc._
+import play.api.mvc.Handler.Stage
 import play.api.routing.HandlerDef
 import play.api.routing.Router
 import play.api.test._
+import play.api.ApplicationLoader.Context
 import play.api.Environment
 import play.api.Mode
 import play.mvc.Http
-
-import scala.jdk.OptionConverters._
-import scala.concurrent.Future
-import scala.util.Random
 
 /**
  * Specs for the global CSRF filter
  */
 class CSRFFilterSpec extends CSRFCommonSpecs {
-  sequential
 
   "a CSRF filter also" should {
     // conditions for adding a token
@@ -169,13 +170,13 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
               .map(Results.Ok(_))
               .getOrElse(Results.NotFound)
           )
-      }) { ws =>
+      }) { (ws, port) =>
         val token = signedTokenProvider.generateToken
         await(
-          ws.url("http://localhost:" + testServerPort)
+          ws.url("http://localhost:" + port)
             .withSession(TokenName -> token)
             .post(Map("foo" -> "bar", TokenName -> token))
-        ).body must_== "bar"
+        ).body[String] must_== "bar"
       }
     }
 
@@ -215,13 +216,157 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
               )
             }
           }
-      }) { ws =>
+      }) { (ws, port) =>
         val token = signedTokenProvider.generateToken
         await(
-          ws.url("http://localhost:" + testServerPort)
+          ws.url("http://localhost:" + port)
             .withSession(TokenName -> token)
             .post(Map("foo" -> "bar"))
-        ).body must_== "bar"
+        ).body[String] must_== "bar"
+      }
+    }
+
+    "reject a request if CSRF filter route modifier tags white and blacklist are empty" in {
+      withActionServer(
+        Seq(
+          "play.http.filters"                          -> classOf[CsrfFilters].getName,
+          "play.filters.csrf.routeModifiers.whiteList" -> Seq(),
+          "play.filters.csrf.routeModifiers.blackList" -> Seq(),
+        )
+      )(implicit app => {
+        case _ =>
+          val env    = inject[Environment]
+          val Action = inject[DefaultActionBuilder]
+          new Stage {
+            override def apply(requestHeader: RequestHeader): (RequestHeader, Handler) = {
+              (
+                requestHeader.addAttr(
+                  Router.Attrs.HandlerDef,
+                  HandlerDef(
+                    env.classLoader,
+                    "routes",
+                    "FooController",
+                    "foo",
+                    Seq.empty,
+                    "POST",
+                    "/foo",
+                    "comments",
+                    Seq()
+                  )
+                ),
+                Action { request =>
+                  request.body.asFormUrlEncoded
+                    .flatMap(_.get("foo"))
+                    .flatMap(_.headOption)
+                    .map(Results.Ok(_))
+                    .getOrElse(Results.NotFound)
+                }
+              )
+            }
+          }
+      }) { (ws, port) =>
+        val token = signedTokenProvider.generateToken
+        await(
+          ws.url("http://localhost:" + port)
+            .withSession(TokenName -> token)
+            .post(Map("foo" -> "bar"))
+        ).status must_== FORBIDDEN
+      }
+    }
+
+    "reject a request if CSRF filter only has route modifier tags blacklist which matches" in {
+      withActionServer(
+        Seq(
+          "play.http.filters"                          -> classOf[CsrfFilters].getName,
+          "play.filters.csrf.routeModifiers.whiteList" -> Seq(),
+          "play.filters.csrf.routeModifiers.blackList" -> Seq("CHECKCSRF"),
+        )
+      )(implicit app => {
+        case _ =>
+          val env    = inject[Environment]
+          val Action = inject[DefaultActionBuilder]
+          new Stage {
+            override def apply(requestHeader: RequestHeader): (RequestHeader, Handler) = {
+              (
+                requestHeader.addAttr(
+                  Router.Attrs.HandlerDef,
+                  HandlerDef(
+                    env.classLoader,
+                    "routes",
+                    "FooController",
+                    "foo",
+                    Seq.empty,
+                    "POST",
+                    "/foo",
+                    "comments",
+                    Seq("CHECKCSRF", "api")
+                  )
+                ),
+                Action { request =>
+                  request.body.asFormUrlEncoded
+                    .flatMap(_.get("foo"))
+                    .flatMap(_.headOption)
+                    .map(Results.Ok(_))
+                    .getOrElse(Results.NotFound)
+                }
+              )
+            }
+          }
+      }) { (ws, port) =>
+        val token = signedTokenProvider.generateToken
+        await(
+          ws.url("http://localhost:" + port)
+            .withSession(TokenName -> token)
+            .post(Map("foo" -> "bar"))
+        ).status must_== FORBIDDEN
+      }
+    }
+
+    "bypass CSRF filter if only route modifier tags blacklist exists but does NOT match" in {
+      withActionServer(
+        Seq(
+          "play.http.filters"                          -> classOf[CsrfFilters].getName,
+          "play.filters.csrf.routeModifiers.whiteList" -> Seq(),
+          "play.filters.csrf.routeModifiers.blackList" -> Seq("CHECKCSRF"),
+        )
+      )(implicit app => {
+        case _ =>
+          val env    = inject[Environment]
+          val Action = inject[DefaultActionBuilder]
+          new Stage {
+            override def apply(requestHeader: RequestHeader): (RequestHeader, Handler) = {
+              (
+                requestHeader.addAttr(
+                  Router.Attrs.HandlerDef,
+                  HandlerDef(
+                    env.classLoader,
+                    "routes",
+                    "FooController",
+                    "foo",
+                    Seq.empty,
+                    "POST",
+                    "/foo",
+                    "comments",
+                    Seq("SOMETHINGELSE", "api")
+                  )
+                ),
+                Action { request =>
+                  request.body.asFormUrlEncoded
+                    .flatMap(_.get("foo"))
+                    .flatMap(_.headOption)
+                    .map(Results.Ok(_))
+                    .getOrElse(Results.NotFound)
+                }
+              )
+            }
+          }
+      }) { (ws, port) =>
+        val token = signedTokenProvider.generateToken
+        await(
+          ws.url("http://localhost:" + port)
+            .withSession(TokenName -> token)
+            .post(Map("foo" -> "bar"))
+        ).status must_== OK
       }
     }
 
@@ -253,25 +398,27 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
       notBufferedFakeApp,
       testServerPort
     ) {
-      val token = signedTokenProvider.generateToken
-      val ws    = inject[WSClient]
-      val response = await(
-        ws.url("http://localhost:" + port)
-          .withSession(TokenName -> token)
-          .addHttpHeaders(CONTENT_TYPE -> "application/x-www-form-urlencoded")
-          .post(
-            Seq(
-              // Ensure token is first so that it makes it into the buffered part
-              TokenName  -> token,
-              "buffered" -> "buffer",
-              // This value must go over the edge of csrf.body.bufferSize
-              "longvalue" -> Random.alphanumeric.take(1024).mkString(""),
-              "foo"       -> "bar"
-            ).map(f => f._1 + "=" + f._2).mkString("&")
-          )
-      )
-      response.status must_== OK
-      response.body must_== "bar buffer"
+      override def running() = {
+        val token = signedTokenProvider.generateToken
+        val ws    = inject[WSClient]
+        val response = await(
+          ws.url("http://localhost:" + port)
+            .withSession(TokenName -> token)
+            .addHttpHeaders(CONTENT_TYPE -> "application/x-www-form-urlencoded")
+            .post(
+              Seq(
+                // Ensure token is first so that it makes it into the buffered part
+                TokenName  -> token,
+                "buffered" -> "buffer",
+                // This value must go over the edge of csrf.body.bufferSize
+                "longvalue" -> Random.alphanumeric.take(1024).mkString(""),
+                "foo"       -> "bar"
+              ).map(f => f._1 + "=" + f._2).mkString("&")
+            )
+        )
+        response.status must_== OK
+        response.body[String] must_== "bar buffer"
+      }
     }
 
     "work with a Java error handler" in {
@@ -308,7 +455,7 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
             val Action = inject[DefaultActionBuilder]
             Action(Results.Ok)
         }
-      } { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      } { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -326,7 +473,7 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
             val Action = inject[DefaultActionBuilder]
             Action(Results.Ok)
         }
-      } { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      } { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -343,7 +490,7 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
               .map { token => Results.Ok(token.value) }
               .getOrElse(Results.NotFound)
           }
-      }) { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      }) { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -364,7 +511,7 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
           } else {
             Action(Results.Ok("Hello world!"))
           }
-      }) { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      }) { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 
@@ -378,7 +525,7 @@ class CSRFFilterSpec extends CSRFCommonSpecs {
           Action { implicit request: RequestHeader =>
             Results.Ok(CSRF.getToken.fold("")(_.value)).withHeaders(responseHeaders: _*)
           }
-      }) { ws => handleResponse(await(makeRequest(ws.url("http://localhost:" + testServerPort)))) }
+      }) { (ws, port) => handleResponse(await(makeRequest(ws.url("http://localhost:" + port)))) }
     }
   }
 }
@@ -397,7 +544,7 @@ class CustomErrorHandler extends CSRF.ErrorHandler {
 }
 
 class JavaErrorHandler extends CSRFErrorHandler {
-  def handle(req: Http.RequestHeader, msg: String) =
+  def handle(req: Http.RequestHeader, msg: String): CompletionStage[play.mvc.Result] =
     CompletableFuture.completedFuture(
       play.mvc.Results.unauthorized(
         "Origin: " + req.attrs
@@ -410,5 +557,5 @@ class JavaErrorHandler extends CSRFErrorHandler {
 }
 
 class CsrfFilters @Inject() (filter: CSRFFilter) extends HttpFilters {
-  def filters = Seq(filter)
+  def filters: Seq[EssentialFilter] = Seq(filter)
 }

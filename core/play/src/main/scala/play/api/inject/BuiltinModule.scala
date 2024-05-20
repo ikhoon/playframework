@@ -5,32 +5,33 @@
 package play.api.inject
 
 import java.util.concurrent.Executor
-
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import akka.actor.ActorSystem
-import akka.actor.ClassicActorSystemProvider
-import akka.actor.CoordinatedShutdown
-import akka.actor.typed.Scheduler
-import akka.stream.Materializer
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContextExecutor
+
 import com.typesafe.config.Config
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.ClassicActorSystemProvider
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.stream.Materializer
 import play.api._
-import play.api.http.HttpConfiguration._
 import play.api.http._
-import play.api.libs.Files.TemporaryFileReaperConfigurationProvider
-import play.api.libs.Files._
+import play.api.http.HttpConfiguration._
 import play.api.libs.concurrent._
+import play.api.libs.Files._
+import play.api.libs.Files.TemporaryFileReaperConfigurationProvider
 import play.api.mvc._
 import play.api.mvc.request.DefaultRequestFactory
 import play.api.mvc.request.RequestFactory
 import play.api.routing.Router
 import play.core.j.JavaRouterAdapter
 import play.core.routing.GeneratedRouter
+import play.libs.concurrent.ClassLoaderExecutionContext
 import play.libs.concurrent.HttpExecutionContext
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContextExecutor
 
 /**
  * The Play BuiltinModule.
@@ -40,12 +41,13 @@ import scala.concurrent.ExecutionContextExecutor
  */
 class BuiltinModule
     extends SimpleModule((env, conf) => {
-      def dynamicBindings(factories: ((Environment, Configuration) => Seq[Binding[_]])*) = {
+      def dynamicBindings(factories: ((Environment, Configuration) => Seq[Binding[?]])*) = {
         factories.flatMap(_(env, conf))
       }
 
       Seq(
         bind[Environment] to env,
+        bind[play.Environment].toProvider[EnvironmentProvider].in(classOf[Singleton]),
         bind[ConfigurationProvider].to(new ConfigurationProvider(conf)),
         bind[Configuration].toProvider[ConfigurationProvider],
         bind[Config].toProvider[ConfigProvider],
@@ -80,12 +82,13 @@ class BuiltinModule
         bind[ClassicActorSystemProvider].toProvider[ClassicActorSystemProviderProvider],
         bind[Materializer].toProvider[MaterializerProvider],
         bind[CoordinatedShutdown].toProvider[CoordinatedShutdownProvider],
-        // Typed Akka Scheduler bind
-        bind[Scheduler].toProvider[AkkaSchedulerProvider],
+        // Typed Pekko Scheduler bind
+        bind[Scheduler].toProvider[PekkoSchedulerProvider],
         bind[ExecutionContextExecutor].toProvider[ExecutionContextProvider],
         bind[ExecutionContext].to(bind[ExecutionContextExecutor]),
         bind[Executor].to(bind[ExecutionContextExecutor]),
         bind[HttpExecutionContext].toSelf,
+        bind[ClassLoaderExecutionContext].toSelf,
         bind[play.core.j.JavaContextComponents].to[play.core.j.DefaultJavaContextComponents],
         bind[play.core.j.JavaHandlerComponents].to[play.core.j.DefaultJavaHandlerComponents],
         bind[FileMimeTypes].toProvider[DefaultFileMimeTypesProvider]
@@ -97,6 +100,10 @@ class BuiltinModule
         RoutesProvider.bindingsFromConfiguration
       )
     })
+
+class EnvironmentProvider @Inject() (env: Environment) extends Provider[play.Environment] {
+  override def get() = env.asJava
+}
 
 // This allows us to access the original configuration via this
 // provider while overriding the binding for Configuration itself.
@@ -124,7 +131,7 @@ class RoutesProvider @Inject() (
 }
 
 object RoutesProvider {
-  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[_]] = {
+  def bindingsFromConfiguration(environment: Environment, configuration: Configuration): Seq[Binding[?]] = {
     val routerClass = Router.load(environment, configuration)
 
     import scala.language.existentials

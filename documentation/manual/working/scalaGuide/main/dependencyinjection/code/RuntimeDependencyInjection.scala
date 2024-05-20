@@ -9,18 +9,24 @@ import play.api.test._
 class RuntimeDependencyInjection extends PlaySpecification {
   "Play's runtime dependency injection support" should {
     "support constructor injection" in new WithApplication() {
-      app.injector.instanceOf[constructor.MyComponent] must beAnInstanceOf[constructor.MyComponent]
+      override def running() = {
+        app.injector.instanceOf[constructor.MyComponent] must beAnInstanceOf[constructor.MyComponent]
+      }
     }
     "support singleton scope" in new WithApplication() {
-      app.injector.instanceOf[singleton.CurrentSharePrice].set(10)
-      app.injector.instanceOf[singleton.CurrentSharePrice].get must_== 10
+      override def running() = {
+        app.injector.instanceOf[singleton.CurrentSharePrice].set(10)
+        app.injector.instanceOf[singleton.CurrentSharePrice].get must_== 10
+      }
     }
     "support stopping" in {
       running() { app => app.injector.instanceOf[cleanup.MessageQueueConnection] }
       cleanup.MessageQueue.stopped must_== true
     }
     "support implemented by annotation" in new WithApplication() {
-      app.injector.instanceOf[implemented.Hello].sayHello("world") must_== "Hello world"
+      override def running() = {
+        app.injector.instanceOf[implemented.Hello].sayHello("world") must_== "Hello world"
+      }
     }
   }
 }
@@ -28,6 +34,7 @@ class RuntimeDependencyInjection extends PlaySpecification {
 package constructor {
 //#constructor
   import javax.inject._
+
   import play.api.libs.ws._
 
   class MyComponent @Inject() (ws: WSClient) {
@@ -56,11 +63,15 @@ package cleanup {
     def connectToMessageQueue() = MessageQueue
     def stop()                  = stopped = true
   }
+  // format: off
   import MessageQueue.connectToMessageQueue
+  // format: on
 
 //#cleanup
-  import scala.concurrent.Future
   import javax.inject._
+
+  import scala.concurrent.Future
+
   import play.api.inject.ApplicationLifecycle
 
   @Singleton
@@ -68,7 +79,7 @@ package cleanup {
     val connection = connectToMessageQueue()
     lifecycle.addStopHook { () => Future.successful(connection.stop()) }
 
-    //...
+    // ...
   }
 //#cleanup
 }
@@ -92,11 +103,13 @@ package implemented {
 }
 
 package guicemodule {
+  // format: off
   import implemented._
+  // format: on
 
 //#guice-module
-  import com.google.inject.AbstractModule
   import com.google.inject.name.Names
+  import com.google.inject.AbstractModule
 
   class Module extends AbstractModule {
     override def configure() = {
@@ -113,11 +126,13 @@ package guicemodule {
 }
 
 package dynamicguicemodule {
+  // format: off
   import implemented._
+  // format: on
 
 //#dynamic-guice-module
-  import com.google.inject.AbstractModule
   import com.google.inject.name.Names
+  import com.google.inject.AbstractModule
   import play.api.Configuration
   import play.api.Environment
 
@@ -134,7 +149,7 @@ package dynamicguicemodule {
       // ClassLoader to load the classes.
       for (l <- languages) {
         val bindingClassName: String = helloConfiguration.get[String](l)
-        val bindingClass: Class[_ <: Hello] =
+        val bindingClass: Class[? <: Hello] =
           environment.classLoader
             .loadClass(bindingClassName)
             .asSubclass(classOf[Hello])
@@ -148,11 +163,13 @@ package dynamicguicemodule {
 }
 
 package eagerguicemodule {
+  // format: off
   import implemented._
+  // format: on
 
 //#eager-guice-module
-  import com.google.inject.AbstractModule
   import com.google.inject.name.Names
+  import com.google.inject.AbstractModule
 
 // A Module is needed to register bindings
   class Module extends AbstractModule {
@@ -174,8 +191,10 @@ package eagerguicemodule {
 
 package eagerguicestartup {
 //#eager-guice-startup
-  import scala.concurrent.Future
   import javax.inject._
+
+  import scala.concurrent.Future
+
   import play.api.inject.ApplicationLifecycle
 
 // This creates an `ApplicationStart` object once at start-up and registers hook for shut-down.
@@ -183,13 +202,16 @@ package eagerguicestartup {
   class ApplicationStart @Inject() (lifecycle: ApplicationLifecycle) {
     // Shut-down hook
     lifecycle.addStopHook { () => Future.successful(()) }
-    //...
+    // ...
   }
 //#eager-guice-startup
 }
 
 package eagerguicemodulestartup {
+  // format: off
   import eagerguicestartup._
+  // format: on
+
 //#eager-guice-module-startup
   import com.google.inject.AbstractModule
 
@@ -202,16 +224,14 @@ package eagerguicemodulestartup {
 }
 
 package playmodule {
+  import implemented._
+//#play-module
+  import play.api.inject._
   import play.api.Configuration
   import play.api.Environment
 
-  import implemented._
-
-//#play-module
-  import play.api.inject._
-
   class HelloModule extends Module {
-    def bindings(environment: Environment, configuration: Configuration) = Seq(
+    def bindings(environment: Environment, configuration: Configuration): Seq[play.api.inject.Binding[?]] = Seq(
       bind[Hello].qualifiedWith("en").to[EnglishHello],
       bind[Hello].qualifiedWith("de").to[GermanHello]
     )
@@ -220,16 +240,14 @@ package playmodule {
 }
 
 package eagerplaymodule {
+  import implemented._
+//#eager-play-module
+  import play.api.inject._
   import play.api.Configuration
   import play.api.Environment
 
-  import implemented._
-
-//#eager-play-module
-  import play.api.inject._
-
   class HelloModule extends Module {
-    def bindings(environment: Environment, configuration: Configuration) = Seq(
+    def bindings(environment: Environment, configuration: Configuration): Seq[play.api.inject.Binding[?]] = Seq(
       bind[Hello].qualifiedWith("en").to[EnglishHello].eagerly(),
       bind[Hello].qualifiedWith("de").to[GermanHello].eagerly()
     )
@@ -238,6 +256,7 @@ package eagerplaymodule {
 }
 package injected.controllers {
   import javax.inject.Inject
+
   import play.api.mvc._
   class Application @Inject() (val controllerComponents: ControllerComponents) extends BaseController {
     def index = Action(Results.Ok)
@@ -246,10 +265,10 @@ package injected.controllers {
 
 package customapplicationloader {
 //#custom-application-loader
-  import play.api.ApplicationLoader
-  import play.api.Configuration
   import play.api.inject._
   import play.api.inject.guice._
+  import play.api.ApplicationLoader
+  import play.api.Configuration
 
   class CustomApplicationLoader extends GuiceApplicationLoader() {
     override def builder(context: ApplicationLoader.Context): GuiceApplicationBuilder = {
@@ -282,4 +301,45 @@ package circularProvider {
   class Bar @Inject() (baz: Baz)
   class Baz @Inject() (foo: Provider[Foo])
 //#circular-provider
+}
+
+package classFieldDependencyInjection {
+//#class-field-dependency-injection
+  import com.google.inject.ImplementedBy
+  import com.google.inject.Inject
+  import com.google.inject.Singleton
+  import play.api.mvc._
+
+  @ImplementedBy(classOf[LiveCounter])
+  trait Counter {
+    def inc(label: String): Unit
+  }
+
+  object NoopCounter extends Counter {
+    override def inc(label: String): Unit = ()
+  }
+
+  @Singleton
+  class LiveCounter extends Counter {
+    override def inc(label: String): Unit = println(s"inc $label")
+  }
+
+  class BaseController extends ControllerHelpers {
+    // LiveCounter will be injected
+    @Inject
+    @volatile protected var counter: Counter = NoopCounter
+
+    def someBaseAction(source: String): Result = {
+      counter.inc(source)
+      Ok(source)
+    }
+  }
+
+  @Singleton
+  class SubclassController @Inject() (action: DefaultActionBuilder) extends BaseController {
+    def index = action {
+      someBaseAction("index")
+    }
+  }
+//#class-field-dependency-injection
 }

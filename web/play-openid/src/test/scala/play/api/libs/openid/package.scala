@@ -4,14 +4,16 @@
 
 package play.api.libs
 
-import scala.io.Source
-import play.shaded.ahc.io.netty.handler.codec.http.QueryStringDecoder
 import java.net.MalformedURLException
+import java.net.URI
 import java.net.URL
-import util.control.Exception._
-import scala.jdk.CollectionConverters._
 
+import scala.io.Source
+import scala.jdk.CollectionConverters._
 import scala.language.implicitConversions
+
+import play.shaded.ahc.io.netty.handler.codec.http.QueryStringDecoder
+import util.control.Exception._
 
 package object openid {
   type Params = Map[String, Seq[String]]
@@ -28,7 +30,7 @@ package object openid {
 
   def parseQueryString(url: String): Params = {
     catching(classOf[MalformedURLException])
-      .opt(new URL(url))
+      .opt(new URI(url).toURL)
       .map { url =>
         new QueryStringDecoder(url.toURI.getRawQuery, false).parameters().asScala.view.mapValues(_.asScala.toSeq).toMap
       }

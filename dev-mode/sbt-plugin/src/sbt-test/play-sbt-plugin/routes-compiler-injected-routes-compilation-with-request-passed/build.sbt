@@ -5,7 +5,7 @@ lazy val root = (project in file("."))
 
 libraryDependencies ++= Seq(guice, specs2 % Test)
 
-scalaVersion := ScriptedTools.scalaVersionFromJavaProperties()
+scalaVersion  := ScriptedTools.scalaVersionFromJavaProperties()
 updateOptions := updateOptions.value.withLatestSnapshots(false)
 update / evictionWarningOptions ~= (_.withWarnTransitiveEvictions(false).withWarnDirectEvictions(false))
 
@@ -45,18 +45,24 @@ ScriptedTools.dumpRoutesSourceOnCompilationFailure
 
 scalacOptions ++= {
   Seq(
-    "-deprecation",
-    "-encoding",
-    "UTF-8",
+    // "-deprecation",
+    // "-encoding",
+    // "UTF-8",
+    // "-unchecked", // all of them are set in interplay, Scala 3 complains about duplicates
     "-feature",
     "-language:existentials",
     "-language:higherKinds",
     "-language:implicitConversions",
-    "-unchecked",
     "-Xfatal-warnings",
-    "-Xlint",
-    "-Ywarn-dead-code",
-    "-Ywarn-numeric-widen",
-    "-Ywarn-value-discard",
-  )
+  ) ++ (CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, _)) =>
+      Seq(
+        "-Xlint",
+        "-Ywarn-dead-code",
+        "-Ywarn-numeric-widen",
+      )
+    case _ =>
+      Seq(
+      )
+  })
 }

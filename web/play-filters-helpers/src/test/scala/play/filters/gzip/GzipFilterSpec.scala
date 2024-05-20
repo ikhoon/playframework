@@ -4,43 +4,44 @@
 
 package play.filters.gzip
 
+import java.io.ByteArrayInputStream
+import java.io.InputStreamReader
+import java.util.zip.Deflater
+import java.util.zip.GZIPInputStream
 import javax.inject.Inject
-import akka.stream.Materializer
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import play.api.Application
+
+import scala.concurrent.Future
+import scala.util.Random
+
+import com.google.common.io.CharStreams
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.specs2.matcher.DataTables
+import org.specs2.matcher.MatchResult
 import play.api.http.HttpChunk
 import play.api.http.HttpEntity
 import play.api.http.HttpFilters
 import play.api.http.HttpProtocol
 import play.api.inject._
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.routing.Router
-import play.api.routing.SimpleRouterImpl
-import play.api.test._
 import play.api.mvc.AnyContentAsEmpty
 import play.api.mvc.Cookie
 import play.api.mvc.DefaultActionBuilder
+import play.api.mvc.EssentialFilter
 import play.api.mvc.Result
 import play.api.mvc.Results._
-import java.util.zip.Deflater
-import java.util.zip.GZIPInputStream
-import java.io.ByteArrayInputStream
-import java.io.InputStreamReader
-
-import com.google.common.io.CharStreams
-
-import scala.concurrent.Future
-import scala.util.Random
-import org.specs2.matcher.DataTables
-import org.specs2.matcher.MatchResult
+import play.api.routing.Router
+import play.api.routing.SimpleRouterImpl
+import play.api.test._
+import play.api.Application
 
 object GzipFilterSpec {
   class ResultRouter @Inject() (action: DefaultActionBuilder, result: Result)
       extends SimpleRouterImpl({ case _ => action(result) })
 
   class Filters @Inject() (gzipFilter: GzipFilter) extends HttpFilters {
-    def filters = Seq(gzipFilter)
+    def filters: Seq[EssentialFilter] = Seq(gzipFilter)
   }
 }
 
@@ -64,7 +65,7 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
       val (plain, gzipped) = (None, Some("gzip"))
 
       "Accept-Encoding of request" || "Response" |
-        //------------------------------------++------------+
+        // ------------------------------------++------------+
         "gzip" !! gzipped |
         "compress,gzip" !! gzipped |
         "compress, gzip" !! gzipped |
@@ -92,8 +93,8 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
         "gzip;q=0.6, identity;q=0.5" !! gzipped |
         "*;q=0.7, gzip;q=0.6, identity;q=0.4" !! gzipped |
         "" !! plain |> { (codings, expectedEncoding) =>
-        (header(CONTENT_ENCODING, requestAccepting(app, codings)) must be).equalTo(expectedEncoding)
-      }
+          (header(CONTENT_ENCODING, requestAccepting(app, codings)) must be).equalTo(expectedEncoding)
+        }
     }
 
     "not gzip empty responses" in withApplication(Ok) { implicit app =>
@@ -231,11 +232,13 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
       val entity =
         HttpEntity.Streamed(Source.single(ByteString(body)), Some(1000), None)
 
-      "not buffer more than the configured threshold" in withApplication(Ok.sendEntity(entity), chunkedThreshold = 512) {
-        implicit app =>
-          val result = makeGzipRequest(app)
-          checkGzippedBody(result, body)(app.materializer)
-          await(result).body must beAnInstanceOf[HttpEntity.Chunked]
+      "not buffer more than the configured threshold" in withApplication(
+        Ok.sendEntity(entity),
+        chunkedThreshold = 512
+      ) { implicit app =>
+        val result = makeGzipRequest(app)
+        checkGzippedBody(result, body)(app.materializer)
+        await(result).body must beAnInstanceOf[HttpEntity.Chunked]
       }
 
       "preserve original headers, cookies, flash and session values" in {
@@ -250,9 +253,9 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
           val result = makeGzipRequest(app)
           checkGzipped(result)
           header(SERVER, result) must beSome("Play")
-          cookies(result).get("cookieName") must beSome.which(cookie => cookie.value == "cookieValue")
-          flash(result).get("flashName") must beSome.which(value => value == "flashValue")
-          session(result).get("sessionName") must beSome.which(value => value == "sessionValue")
+          cookies(result).get("cookieName") must beSome[Cookie].which(cookie => cookie.value == "cookieValue")
+          flash(result).get("flashName") must beSome[String].which(value => value == "flashValue")
+          session(result).get("sessionName") must beSome[String].which(value => value == "sessionValue")
         }
 
         "when buffer more than configured threshold" in withApplication(
@@ -266,9 +269,9 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
           val result = makeGzipRequest(app)
           checkGzippedBody(result, body)(app.materializer)
           header(SERVER, result) must beSome("Play")
-          cookies(result).get("cookieName") must beSome.which(cookie => cookie.value == "cookieValue")
-          flash(result).get("flashName") must beSome.which(value => value == "flashValue")
-          session(result).get("sessionName") must beSome.which(value => value == "sessionValue")
+          cookies(result).get("cookieName") must beSome[Cookie].which(cookie => cookie.value == "cookieValue")
+          flash(result).get("flashName") must beSome[String].which(value => value == "flashValue")
+          session(result).get("sessionName") must beSome[String].which(value => value == "sessionValue")
         }
       }
 
@@ -304,9 +307,9 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
         val result = makeGzipRequest(app)
         checkGzipped(result)
         header(SERVER, result) must beSome("Play")
-        cookies(result).get("cookieName") must beSome.which(cookie => cookie.value == "cookieValue")
-        flash(result).get("flashName") must beSome.which(value => value == "flashValue")
-        session(result).get("sessionName") must beSome.which(value => value == "sessionValue")
+        cookies(result).get("cookieName") must beSome[Cookie].which(cookie => cookie.value == "cookieValue")
+        flash(result).get("flashName") must beSome[String].which(value => value == "flashValue")
+        session(result).get("sessionName") must beSome[String].which(value => value == "sessionValue")
       }
     }
 
@@ -327,16 +330,16 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
         val result = makeGzipRequest(app)
         checkGzipped(result)
         header(SERVER, result) must beSome("Play")
-        cookies(result).get("cookieName") must beSome.which(cookie => cookie.value == "cookieValue")
-        flash(result).get("flashName") must beSome.which(value => value == "flashValue")
-        session(result).get("sessionName") must beSome.which(value => value == "sessionValue")
+        cookies(result).get("cookieName") must beSome[Cookie].which(cookie => cookie.value == "cookieValue")
+        flash(result).get("flashName") must beSome[String].which(value => value == "flashValue")
+        session(result).get("sessionName") must beSome[String].which(value => value == "sessionValue")
       }
 
       "preserve original Vary header values" in withApplication(Ok("hello").withHeaders(VARY -> "original")) {
         implicit app =>
           val result = makeGzipRequest(app)
           checkGzipped(result)
-          header(VARY, result) must beSome.which(header => header contains "original,")
+          header(VARY, result) must beSome[String].which(header => header contains "original,")
       }
 
       "preserve original Vary header values and not duplicate case-insensitive ACCEPT-ENCODING" in withApplication(
@@ -344,7 +347,7 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
       ) { implicit app =>
         val result = makeGzipRequest(app)
         checkGzipped(result)
-        header(VARY, result) must beSome.which(header =>
+        header(VARY, result) must beSome[String].which(header =>
           header
             .split(",")
             .count(
@@ -449,8 +452,7 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
   }
 
   def checkGzippedBody(result: Future[Result], body: String)(
-      implicit
-      mat: Materializer
+      implicit mat: Materializer
   ): MatchResult[Any] = {
     checkGzipped(result)
     val resultBody = contentAsBytes(result)
@@ -459,8 +461,7 @@ class GzipFilterSpec extends PlaySpecification with DataTables {
   }
 
   def checkNotGzipped(result: Future[Result], body: String)(
-      implicit
-      mat: Materializer
+      implicit mat: Materializer
   ): MatchResult[Any] = {
     header(CONTENT_ENCODING, result) must beNone
     contentAsString(result) must_== body

@@ -11,39 +11,39 @@ import java.net.URLConnection
 import java.time._
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
-import java.util.Date
 import java.util.regex.Pattern
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-import akka.stream.scaladsl.StreamConverters
-
-import play.api._
-import play.api.http._
-import play.api.inject.ApplicationLifecycle
-import play.api.inject.Module
-import play.api.libs._
-import play.api.mvc._
-import play.core.routing.ReverseRouteContext
-import play.utils.InvalidUriEncodingException
-import play.utils.Resources
-import play.utils.UriEncoding
-import play.utils.ExecCtxUtils
-
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.blocking
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.blocking
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 import scala.util.Failure
 import scala.util.Success
 
+import org.apache.pekko.stream.scaladsl.StreamConverters
+import play.api._
+import play.api.http._
+import play.api.inject.ApplicationLifecycle
+import play.api.inject.Binding
+import play.api.inject.Module
+import play.api.libs._
+import play.api.mvc._
+import play.core.routing.ReverseRouteContext
+import play.utils.ExecCtxUtils
+import play.utils.InvalidUriEncodingException
+import play.utils.Resources
+import play.utils.UriEncoding
+
 class AssetsModule extends Module {
-  override def bindings(environment: Environment, configuration: Configuration) = Seq(
+  override def bindings(environment: Environment, configuration: Configuration): scala.collection.Seq[Binding[?]] = Seq(
     bind[Assets].toSelf,
     bind[AssetsMetadata].toProvider[AssetsMetadataProvider],
     bind[AssetsFinder].toProvider[AssetsFinderProvider],
@@ -108,7 +108,7 @@ trait AssetsComponents {
 
   def assetsFinder: AssetsFinder = assetsMetadata.finder
 
-  lazy val assets: Assets = new Assets(httpErrorHandler, assetsMetadata)
+  lazy val assets: Assets = new Assets(httpErrorHandler, assetsMetadata, environment)
 }
 
 import Execution.trampoline
@@ -117,7 +117,7 @@ import Execution.trampoline
  * A map designed to prevent the "thundering herds" issue.
  *
  * This could be factored out into its own thing, improved and made available more widely. We could also
- * use spray-cache once it has been re-worked into the Akka code base.
+ * use spray-cache once it has been re-worked into the Pekko code base.
  *
  * The essential mechanics of the cache are that all asset requests are remembered, unless their lookup fails or if
  * the asset doesn't exist, in which case we don't remember them in order to avoid an exploit where we would otherwise
@@ -518,8 +518,8 @@ private class AssetInfo(
     config: AssetsConfiguration,
     fileMimeTypes: FileMimeTypes
 ) {
-  import ResponseHeader._
   import config._
+  import ResponseHeader._
 
   private val encodingNames: Seq[String]        = compressedUrls.map(_._1)
   private val encodingsByName: Map[String, URL] = compressedUrls.toMap
@@ -570,10 +570,10 @@ private class AssetInfo(
     }
 
     url.getProtocol match {
-      case "file"                      => Some(httpDateFormat.format(Instant.ofEpochMilli(new File(url.toURI).lastModified)))
-      case "jar"                       => getLastModified[JarURLConnection](c => c.getJarEntry.getTime)
-      case "bundle" | "bundleresource" => getLastModified[URLConnection](c => c.getLastModified)
-      case _                           => None
+      case "file"                                   => Some(httpDateFormat.format(Instant.ofEpochMilli(new File(url.toURI).lastModified)))
+      case "jar"                                    => getLastModified[JarURLConnection](c => c.getJarEntry.getTime)
+      case "bundle" | "bundleresource" | "resource" => getLastModified[URLConnection](c => c.getLastModified)
+      case _                                        => None
     }
   }
 
@@ -704,7 +704,7 @@ object Assets {
 
     // This uses StaticAssetsMetadata to obtain the full path to the asset.
     implicit def assetPathBindable(implicit rrc: ReverseRouteContext): PathBindable[Asset] = new PathBindable[Asset] {
-      def bind(key: String, value: String) = Right(new Asset(value))
+      def bind(key: String, value: String): Either[String, Asset] = Right(new Asset(value))
 
       def unbind(key: String, value: Asset): String = {
         val base = pathFromParams(rrc)
@@ -716,11 +716,22 @@ object Assets {
 }
 
 @Singleton
-class Assets @Inject() (errorHandler: HttpErrorHandler, meta: AssetsMetadata) extends AssetsBuilder(errorHandler, meta)
+class Assets @Inject() (errorHandler: HttpErrorHandler, meta: AssetsMetadata, env: Environment)
+    extends AssetsBuilder(errorHandler, meta, env) {
+  @deprecated("Use Assets(errorHandler,meta,env) instead.", "2.9")
+  def this(errorHandler: HttpErrorHandler, meta: AssetsMetadata) = {
+    this(errorHandler, meta, null)
+  }
+}
 
-class AssetsBuilder(errorHandler: HttpErrorHandler, meta: AssetsMetadata) extends ControllerHelpers {
+class AssetsBuilder(errorHandler: HttpErrorHandler, meta: AssetsMetadata, env: Environment) extends ControllerHelpers {
   import meta._
   import Assets._
+
+  @deprecated("Use AssetsBuilder(errorHandler,meta,env) instead.", "2.9")
+  def this(errorHandler: HttpErrorHandler, meta: AssetsMetadata) = {
+    this(errorHandler, meta, null)
+  }
 
   protected val Action: ActionBuilder[Request, AnyContent] = new ActionBuilder.IgnoringBody()(Execution.trampoline)
 
@@ -822,7 +833,7 @@ class AssetsBuilder(errorHandler: HttpErrorHandler, meta: AssetsMetadata) extend
       case Some((assetInfo, acceptEncoding)) =>
         val connection = assetInfo.url(acceptEncoding).openConnection()
         // Make sure it's not a directory
-        if (Resources.isUrlConnectionADirectory(connection)) {
+        if (Resources.isUrlConnectionADirectory(if (env != null) env.classLoader else null, connection)) {
           Resources.closeUrlConnection(connection)
           notFound
         } else {

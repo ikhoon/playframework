@@ -39,9 +39,9 @@ The default way to test a Play application is with [JUnit](https://junit.org/jun
 
 Some developers prefer to write their assertions in a more fluent style than JUnit asserts. Popular libraries for other assertion styles are included for convenience.
 
-[Hamcrest](http://hamcrest.org/JavaHamcrest/) matchers:
+[AssertJ](https://assertj.github.io/doc/) matchers:
 
-@[test-hamcrest](code/javaguide/tests/HamcrestTest.java)
+@[test-assertj](code/javaguide/tests/AssertJTest.java)
 
 ### Mocks
 
@@ -95,6 +95,6 @@ As a template is a just a method, you can execute it from a test and check the r
 
 ## Unit testing with Messages
 
-If you need a `play.i18n.MessagesApi` instance for unit testing, you can use [`play.test.Helpers.stubMessagesApi()`](api/java/play/test/Helpers.html#stubMessagesApi-java.util.Map-play.i18n.Langs-) to provide one:
+If you need a `play.i18n.MessagesApi` instance for unit testing, you can use [`play.test.Helpers.stubMessagesApi()`](api/java/play/test/Helpers.html#stubMessagesApi\(java.util.Map,play.i18n.Langs\)) to provide one:
 
 @[test-messages](code/javaguide/tests/MessagesTest.java)

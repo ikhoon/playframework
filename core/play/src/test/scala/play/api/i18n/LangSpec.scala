@@ -6,11 +6,12 @@ package play.api.i18n
 
 import java.util.Locale
 
-import play.api.libs.json.Json
-import play.api.libs.json.JsString
-import play.api.libs.json.JsSuccess
+import scala.language.postfixOps
 
 import org.specs2.specification.core.Fragments
+import play.api.libs.json.JsString
+import play.api.libs.json.JsSuccess
+import play.api.libs.json.Json
 
 class LangSpec extends org.specs2.mutable.Specification {
   "Lang" title

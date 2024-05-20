@@ -8,18 +8,18 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import javax.sql.DataSource
 
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+
 import com.typesafe.config.Config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import play.api._
 import play.api.inject._
 import play.api.libs.JNDI
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
 
 /**
  * HikariCP runtime inject module.
@@ -128,6 +128,7 @@ private[db] class HikariCPConfig private (
     hikariConfig.setAutoCommit(config.get[Boolean]("autoCommit"))
     hikariConfig.setConnectionTimeout(toMillis(config.get[Duration]("connectionTimeout")))
     hikariConfig.setIdleTimeout(toMillis(config.get[Duration]("idleTimeout")))
+    config.get[Option[Duration]]("keepaliveTime").foreach(duration => hikariConfig.setKeepaliveTime(toMillis(duration)))
     hikariConfig.setMaxLifetime(toMillis(config.get[Duration]("maxLifetime")))
     config.get[Option[String]]("connectionTestQuery").foreach(hikariConfig.setConnectionTestQuery)
     config.get[Option[Int]]("minimumIdle").foreach(hikariConfig.setMinimumIdle)
@@ -146,6 +147,7 @@ private[db] class HikariCPConfig private (
     config.get[Option[String]]("connectionInitSql").foreach(hikariConfig.setConnectionInitSql)
     config.get[Option[String]]("catalog").foreach(hikariConfig.setCatalog)
     config.get[Option[String]]("transactionIsolation").foreach(hikariConfig.setTransactionIsolation)
+    config.get[Option[String]]("exceptionOverrideClassName").foreach(hikariConfig.setExceptionOverrideClassName)
     hikariConfig.setValidationTimeout(config.get[FiniteDuration]("validationTimeout").toMillis)
     hikariConfig.setLeakDetectionThreshold(toMillis(config.get[Duration]("leakDetectionThreshold")))
 

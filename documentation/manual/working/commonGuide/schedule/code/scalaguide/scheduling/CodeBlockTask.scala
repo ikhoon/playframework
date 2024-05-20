@@ -6,10 +6,10 @@ package scalaguide.scheduling
 
 import javax.inject.Inject
 
-import akka.actor.ActorSystem
-
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
+
+import org.apache.pekko.actor.ActorSystem
 
 //#schedule-block-with-interval
 class CodeBlockTask @Inject() (actorSystem: ActorSystem)(implicit executionContext: ExecutionContext) {
@@ -22,7 +22,7 @@ class CodeBlockTask @Inject() (actorSystem: ActorSystem)(implicit executionConte
 
 //#schedule-block-once
 class ScheduleOnceTask @Inject() (actorSystem: ActorSystem)(implicit executionContext: ExecutionContext) {
-  actorSystem.scheduler.scheduleWithFixedDelay(initialDelay = 10.seconds, delay = 10.seconds) { () =>
+  actorSystem.scheduler.scheduleOnce(delay = 10.seconds) { () =>
     // the block of code that will be executed
     actorSystem.log.info("Executing something...")
   }

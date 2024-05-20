@@ -5,14 +5,16 @@
 package scalaguide.http.routing
 
 import org.specs2.mutable.Specification
-import play.api.test.FakeRequest
 import play.api.mvc._
-import play.api.test.Helpers._
-import play.api.test._
 import play.api.routing.Router
+import play.api.test._
+import play.api.test.FakeRequest
+import play.api.test.Helpers._
 
 package controllers {
   import javax.inject.Inject
+
+  import play.api.libs.json.JsValue
 
   object Client {
     def findById(id: Long) = Some("showing client " + id)
@@ -51,10 +53,10 @@ package controllers {
   }
 
   class Api @Inject() (cc: ControllerComponents) extends AbstractController(cc) {
-    def list(version: Option[String])   = Action(Ok("version " + version))
-    def listItems(params: List[String]) = Action(Ok("params " + params.mkString(",")))
-    def listIntItems(params: List[Int]) = Action(Ok("params " + params.mkString(",")))
-    def newThing                        = Action(parse.json) { request => Ok(request.body) }
+    def list(version: Option[String])                       = Action(Ok("version " + version))
+    def listItems(params: List[String]): Action[AnyContent] = Action(Ok("params " + params.mkString(",")))
+    def listIntItems(params: List[Int])                     = Action(Ok("params " + params.mkString(",")))
+    def newThing: Action[JsValue]                           = Action(parse.json) { request => Ok(request.body) }
   }
 }
 
@@ -158,7 +160,7 @@ object ScalaRoutingSpec extends Specification {
     }
   }
 
-  def contentOf(rh: RequestHeader, router: Class[_ <: Router] = classOf[Routes]) = {
+  def contentOf(rh: RequestHeader, router: Class[? <: Router] = classOf[Routes]) = {
     running() { app =>
       implicit val mat = app.materializer
       contentAsString {
@@ -171,7 +173,7 @@ object ScalaRoutingSpec extends Specification {
     }
   }
 
-  def statusOf(rh: RequestHeader, router: Class[_ <: Router] = classOf[Routes]) = {
+  def statusOf(rh: RequestHeader, router: Class[? <: Router] = classOf[Routes]) = {
     running() { app =>
       implicit val mat = app.materializer
       status {

@@ -6,7 +6,7 @@ package play.docs
 
 import java.io.Closeable
 
-import akka.stream.scaladsl.StreamConverters
+import org.apache.pekko.stream.scaladsl.StreamConverters
 import play.api.http._
 import play.api.mvc._
 import play.core.BuildDocHandler
@@ -31,6 +31,7 @@ class DocumentationHandler(repo: FileRepository, apiRepo: FileRepository, toClos
         "html" -> "text/html",
         "css"  -> "text/css",
         "png"  -> "image/png",
+        "svg"  -> "image/svg+xml",
         "js"   -> "application/javascript",
         "jpg"  -> "image/jpeg",
         "ico"  -> "image/x-icon"

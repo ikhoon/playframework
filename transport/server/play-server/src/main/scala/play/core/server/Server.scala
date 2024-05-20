@@ -4,30 +4,34 @@
 
 package play.core.server
 
+import java.net.URI
 import java.util.function.{ Function => JFunction }
-import akka.actor.CoordinatedShutdown
-import akka.annotation.ApiMayChange
+
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.Future
+import scala.language.postfixOps
+import scala.util.Try
+
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import play.api.ApplicationLoader.Context
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.annotation.ApiMayChange
+import play.{ ApplicationLoader => JApplicationLoader }
+import play.{ BuiltInComponents => JBuiltInComponents }
+import play.{ BuiltInComponentsFromContext => JBuiltInComponentsFromContext }
 import play.api._
-import play.api.http.DevHttpErrorHandler
 import play.api.http.HttpErrorHandler
 import play.api.http.Port
 import play.api.inject.ApplicationLifecycle
 import play.api.inject.DefaultApplicationLifecycle
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
+import play.api.mvc.request.RequestTarget
 import play.api.routing.Router
+import play.api.ApplicationLoader.Context
 import play.core._
 import play.routing.{ Router => JRouter }
-import play.{ ApplicationLoader => JApplicationLoader }
-import play.{ BuiltInComponents => JBuiltInComponents }
-import play.{ BuiltInComponentsFromContext => JBuiltInComponentsFromContext }
-
-import scala.concurrent.Future
-import scala.language.postfixOps
-import scala.util.Try
 
 trait WebSocketable {
   def getHeader(header: String): String
@@ -84,6 +88,8 @@ trait Server extends ReloadableServer {
  * Utilities for creating a server that runs around a block of code.
  */
 object Server {
+
+  private val logger = Logger(getClass)
 
   /**
    * Try to get the handler for a request and return it as a `Right`. If we
@@ -142,6 +148,45 @@ object Server {
   }
 
   /**
+   * Create request target information from a request uri String where
+   * there was a parsing failure.
+   */
+  private[server] def createUnparsedRequestTarget(requestUri: String): RequestTarget = new RequestTarget {
+    override lazy val uri: URI = new URI(uriString)
+
+    override def uriString: String = requestUri
+
+    override lazy val path: String = {
+      // The URI may be invalid, so instead, do a crude heuristic to drop the host and query string from it to get the
+      // path, and don't decode.
+      // RICH: This looks like a source of potential security bugs to me!
+      val withoutHost        = uriString.dropWhile(_ != '/')
+      val withoutQueryString = withoutHost.split('?').head
+      if (withoutQueryString.isEmpty) "/" else withoutQueryString
+    }
+    override lazy val queryMap: Map[String, Seq[String]] = {
+      // Very rough parse of query string that doesn't decode
+      if (requestUri.contains("?")) {
+        requestUri
+          .split("\\?", 2)(1)
+          .split('&')
+          .map { keyPair =>
+            keyPair.split("=", 2) match {
+              case Array(key)        => key -> ""
+              case Array(key, value) => key -> value
+            }
+          }
+          .groupBy(_._1)
+          .map {
+            case (name, values) => name -> values.map(_._2).toSeq
+          }
+      } else {
+        Map.empty
+      }
+    }
+  }
+
+  /**
    * Parses the config setting `infinite` as `Long.MaxValue` otherwise uses Config's built-in
    * parsing of byte values.
    */
@@ -154,6 +199,31 @@ object Server {
       case "infinite" => Long.MaxValue
       case _          => config.getBytes(if (config.hasPath(deprecatedPath)) deprecatedPath else path)
     }
+  }
+
+  /**
+   * Determines the timeout after a server is forcefully stopped.
+   * The termination hard-deadline is either what was configured by the user or defaults to `service-requests-done` phase timeout.
+   * Also warns about timeout mismatches in case the user configured time out is higher then the `service-requests-done` phase timeout.
+   */
+  private[server] def determineServerTerminateTimeout(
+      terminationTimeout: Option[FiniteDuration],
+      terminationDelay: FiniteDuration
+  )(implicit actorSystem: ActorSystem): FiniteDuration = {
+    val cs                         = CoordinatedShutdown(actorSystem)
+    val serviceRequestsDoneTimeout = cs.timeout(CoordinatedShutdown.PhaseServiceRequestsDone)
+    val serverTerminateTimeout     = terminationTimeout.getOrElse(serviceRequestsDoneTimeout)
+    if (serverTerminateTimeout > serviceRequestsDoneTimeout)
+      logger.warn(
+        s"""The value for `play.server.terminationTimeout` [$serverTerminateTimeout] is higher than the total `service-requests-done.timeout` duration [$serviceRequestsDoneTimeout].
+           |Set `pekko.coordinated-shutdown.phases.service-requests-done.timeout` to an equal (or greater) value to prevent unexpected server termination.""".stripMargin
+      )
+    else if (terminationDelay.length > 0 && (terminationDelay + serverTerminateTimeout) > serviceRequestsDoneTimeout)
+      logger.warn(
+        s"""The total of `play.server.waitBeforeTermination` [$terminationDelay]` and `play.server.terminationTimeout` [$serverTerminateTimeout], which is ${terminationDelay + serverTerminateTimeout}, is higher than the total `service-requests-done.timeout` duration [$serviceRequestsDoneTimeout].
+           |Set `pekko.coordinated-shutdown.phases.service-requests-done.timeout` to an equal (or greater) value to prevent unexpected server termination.""".stripMargin
+      )
+    serverTerminateTimeout
   }
 
   /**
@@ -278,6 +348,11 @@ object Server {
   }
 
   case object ServerStoppedReason extends CoordinatedShutdown.Reason
+
+  private[server] def routeModifierDefersBodyParsing(global: Boolean, rh: RequestHeader): Boolean = {
+    import play.api.routing.Router.RequestImplicits._
+    (global || rh.hasRouteModifier("deferBodyParsing")) && !rh.hasRouteModifier("dontDeferBodyParsing")
+  }
 }
 
 /**
@@ -308,10 +383,10 @@ private[server] trait ServerFromRouter {
    *
    * @param config the server configuration
    * @param routes the routes definitions
-   * @return an AkkaHttpServer instance
+   * @return an PekkoHttpServer instance
    */
   @deprecated(
-    "Use fromRouterWithComponents or use DefaultAkkaHttpServerComponents/DefaultNettyServerComponents",
+    "Use fromRouterWithComponents or use DefaultPekkoHttpServerComponents/DefaultNettyServerComponents",
     "2.7.0"
   )
   def fromRouter(config: ServerConfig = ServerConfig())(routes: PartialFunction[RequestHeader, Handler]): Server = {
@@ -323,7 +398,7 @@ private[server] trait ServerFromRouter {
    *
    * @param config the server configuration
    * @param routes the routes definitions
-   * @return an AkkaHttpServer instance
+   * @return an PekkoHttpServer instance
    */
   def fromRouterWithComponents(
       config: ServerConfig = ServerConfig()

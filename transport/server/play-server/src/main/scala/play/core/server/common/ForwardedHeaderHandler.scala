@@ -7,14 +7,14 @@ package play.core.server.common
 import java.net.InetAddress
 import java.security.cert.X509Certificate
 
+import scala.annotation.tailrec
+
+import play.api.mvc.request.RemoteConnection
+import play.api.mvc.Headers
 import play.api.Configuration
 import play.api.Logger
-import play.api.mvc.Headers
 import play.core.server.common.NodeIdentifierParser.Ip
-
-import scala.annotation.tailrec
 import ForwardedHeaderHandler._
-import play.api.mvc.request.RemoteConnection
 
 /**
  * The ForwardedHeaderHandler class works out the remote address and protocol
@@ -166,10 +166,10 @@ private[server] object ForwardedHeaderHandler {
      */
     def forwardedHeaders(headers: Headers): Seq[ForwardedEntry] = version match {
       case Rfc7239 => {
-        val params = (for {
+        val params = for {
           fhs <- headers.getAll("Forwarded")
           fh  <- fhs.split(",\\s*")
-        } yield (fh
+        } yield fh
           .split(";")
           .iterator
           .flatMap {
@@ -185,7 +185,7 @@ private[server] object ForwardedHeaderHandler {
               }
             }
           }
-          .toMap))
+          .toMap
 
         params.map { (paramMap: Map[String, String]) => ForwardedEntry(paramMap.get("for"), paramMap.get("proto")) }
       }
@@ -195,8 +195,8 @@ private[server] object ForwardedHeaderHandler {
         val forHeaders                 = h(headers, "X-Forwarded-For")
         val protoHeaders               = h(headers, "X-Forwarded-Proto")
         if (forHeaders.length == protoHeaders.length) {
-          forHeaders.zip(protoHeaders).map {
-            case (f, p) => ForwardedEntry(Some(f), Some(p))
+          forHeaders.lazyZip(protoHeaders).map { (f, p) =>
+            ForwardedEntry(Some(f), Some(p))
           }
         } else {
           // If the lengths vary, then discard the protoHeaders because we can't tell which

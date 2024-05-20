@@ -2,8 +2,8 @@
  * Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
-import sbt.Keys._
 import sbt._
+import sbt.Keys._
 
 object Generators {
   // Generates a scala file that contains the play version for use at runtime.
@@ -11,8 +11,8 @@ object Generators {
       version: String,
       scalaVersion: String,
       sbtVersion: String,
-      akkaVersion: String,
-      akkaHttpVersion: String,
+      pekkoVersion: String,
+      pekkoHttpVersion: String,
       dir: File
   ): Seq[File] = {
     val file = dir / "PlayVersion.scala"
@@ -23,8 +23,8 @@ object Generators {
           |  val current = "$version"
           |  val scalaVersion = "$scalaVersion"
           |  val sbtVersion = "$sbtVersion"
-          |  val akkaVersion = "$akkaVersion"
-          |  val akkaHttpVersion = "$akkaHttpVersion"
+          |  val pekkoVersion = "$pekkoVersion"
+          |  val pekkoHttpVersion = "$pekkoHttpVersion"
           |}
           |""".stripMargin
 
@@ -65,7 +65,7 @@ object Commands {
       filtered ++ Seq(
         GlobalScope / packageDoc / publishArtifact := toggle,
         GlobalScope / packageSrc / publishArtifact := toggle,
-        GlobalScope / publishArtifact := true
+        GlobalScope / publishArtifact              := true
       ),
       state.put(quickPublishToggle, toggle)
     )

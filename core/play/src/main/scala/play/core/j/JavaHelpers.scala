@@ -12,32 +12,32 @@ import java.util
 import java.util.Locale
 import java.util.Optional
 
+import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
+
 import play.api.http.DefaultFileMimeTypesProvider
 import play.api.http.FileMimeTypes
 import play.api.http.HttpConfiguration
 import play.api.http.MediaRange
+import play.api.i18n._
 import play.api.i18n.Langs
 import play.api.i18n.MessagesApi
-import play.api.i18n._
 import play.api.mvc._
-import play.api.Configuration
-import play.api.Environment
 import play.api.mvc.request.RemoteConnection
 import play.api.mvc.request.RequestTarget
+import play.api.Configuration
+import play.api.Environment
 import play.i18n
 import play.libs.typedmap.TypedEntry
 import play.libs.typedmap.TypedKey
 import play.libs.typedmap.TypedMap
-import play.mvc.Http.RequestBody
+import play.mvc.Http
 import play.mvc.Http.{ Cookie => JCookie }
 import play.mvc.Http.{ Cookies => JCookies }
 import play.mvc.Http.{ Request => JRequest }
 import play.mvc.Http.{ RequestHeader => JRequestHeader }
 import play.mvc.Http.{ RequestImpl => JRequestImpl }
-import play.mvc.Http
-
-import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
+import play.mvc.Http.RequestBody
 
 /**
  * Provides helper methods that manage Java to Scala Result and Scala to Java Context
@@ -48,7 +48,7 @@ trait JavaHelpers {
     cookies.asScala.toSeq.map(_.asScala())
   }
 
-  def cookiesToJavaCookies(cookies: Cookies) = {
+  def cookiesToJavaCookies(cookies: Cookies): JCookies = {
     new JCookies {
       override def get(name: String): Optional[JCookie] = Optional.ofNullable(cookies.get(name).map(_.asJava).orNull)
 
@@ -204,13 +204,12 @@ class RequestHeaderImpl(header: RequestHeader) extends JRequestHeader {
   override def attrs: TypedMap                                                = new TypedMap(header.attrs)
   override def withAttrs(newAttrs: TypedMap): JRequestHeader                  = header.withAttrs(newAttrs.asScala).asJava
   override def addAttr[A](key: TypedKey[A], value: A): JRequestHeader         = withAttrs(attrs.put(key, value))
-  override def addAttrs(e1: TypedEntry[_]): JRequestHeader                    = withAttrs(attrs.putAll(e1))
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_]): JRequestHeader = withAttrs(attrs.putAll(e1, e2))
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_], e3: TypedEntry[_]): JRequestHeader =
+  override def addAttrs(e1: TypedEntry[?]): JRequestHeader                    = withAttrs(attrs.putAll(e1))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?]): JRequestHeader = withAttrs(attrs.putAll(e1, e2))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?], e3: TypedEntry[?]): JRequestHeader =
     withAttrs(attrs.putAll(e1, e2, e3))
-  override def addAttrs(entries: TypedEntry[_]*): JRequestHeader           = withAttrs(attrs.putAll(entries: _*))
-  override def addAttrs(entries: util.List[TypedEntry[_]]): JRequestHeader = withAttrs(attrs.putAll(entries))
-  override def removeAttr(key: TypedKey[_]): JRequestHeader                = withAttrs(attrs.remove(key))
+  override def addAttrs(entries: util.List[TypedEntry[?]]): JRequestHeader = withAttrs(attrs.putAll(entries))
+  override def removeAttr(key: TypedKey[?]): JRequestHeader                = withAttrs(attrs.remove(key))
 
   override def withBody(body: RequestBody): JRequest = new JRequestImpl(header.withBody(body))
 
@@ -231,20 +230,20 @@ class RequestHeaderImpl(header: RequestHeader) extends JRequestHeader {
 
   @deprecated
   override def getQueryString(key: String): String = {
-    if (queryString().containsKey(key) && queryString().get(key).length > 0) queryString().get(key)(0) else null
+    if (queryString.containsKey(key) && queryString.get(key).length > 0) queryString.get(key)(0) else null
   }
 
   override def queryString(key: String): Optional[String] = header.getQueryString(key).toJava
 
-  @deprecated override def cookie(name: String): JCookie = cookies().get(name).orElse(null)
+  override def cookie(name: String) = cookies().get(name)
 
-  override def getCookie(name: String): Optional[JCookie] = cookies().get(name)
+  @deprecated override def getCookie(name: String): Optional[JCookie] = cookie(name)
 
   override def hasBody: Boolean = header.hasBody
 
-  override def contentType(): Optional[String] = (header.contentType).toJava
+  override def contentType(): Optional[String] = header.contentType.toJava
 
-  override def charset(): Optional[String] = (header.charset).toJava
+  override def charset(): Optional[String] = header.charset.toJava
 
   override def withTransientLang(lang: play.i18n.Lang): JRequestHeader = addAttr(i18n.Messages.Attrs.CurrentLang, lang)
 
@@ -257,31 +256,24 @@ class RequestHeaderImpl(header: RequestHeader) extends JRequestHeader {
 
   override def toString: String = header.toString
 
-  override lazy val getHeaders: Http.Headers = header.headers.asJava
+  @deprecated
+  override lazy val getHeaders: Http.Headers = headers
+
+  override lazy val headers: Http.Headers = header.headers.asJava
 }
 
-/**
- * trait needed as workaround for https://github.com/scala/bug/issues/11944
- * Also see original pull request: https://github.com/playframework/playframework/pull/10199
- * sealed so that lack of implementation can't be accidentally used elsewhere
- */
-private[j] sealed trait RequestImplHelper extends JRequest {
-  override def addAttrs(entries: TypedEntry[_]*): JRequest = ???
-}
-
-class RequestImpl(request: Request[RequestBody]) extends RequestHeaderImpl(request) with RequestImplHelper {
+class RequestImpl(request: Request[RequestBody]) extends RequestHeaderImpl(request) with JRequest {
   override def asScala: Request[RequestBody] = request
 
   override def attrs: TypedMap                                          = new TypedMap(asScala.attrs)
   override def withAttrs(newAttrs: TypedMap): JRequest                  = new JRequestImpl(request.withAttrs(newAttrs.asScala))
   override def addAttr[A](key: TypedKey[A], value: A): JRequest         = withAttrs(attrs.put(key, value))
-  override def addAttrs(e1: TypedEntry[_]): JRequest                    = withAttrs(attrs.putAll(e1))
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_]): JRequest = withAttrs(attrs.putAll(e1, e2))
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_], e3: TypedEntry[_]): JRequest =
+  override def addAttrs(e1: TypedEntry[?]): JRequest                    = withAttrs(attrs.putAll(e1))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?]): JRequest = withAttrs(attrs.putAll(e1, e2))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?], e3: TypedEntry[?]): JRequest =
     withAttrs(attrs.putAll(e1, e2, e3))
-  override def addAttrs(entries: TypedEntry[_]*): JRequest           = withAttrs(attrs.putAll(entries: _*))
-  override def addAttrs(entries: util.List[TypedEntry[_]]): JRequest = withAttrs(attrs.putAll(entries))
-  override def removeAttr(key: TypedKey[_]): JRequest                = withAttrs(attrs.remove(key))
+  override def addAttrs(entries: util.List[TypedEntry[?]]): JRequest = withAttrs(attrs.putAll(entries))
+  override def removeAttr(key: TypedKey[?]): JRequest                = withAttrs(attrs.remove(key))
 
   override def body: RequestBody                     = request.body
   override def hasBody: Boolean                      = request.hasBody

@@ -9,29 +9,29 @@ import java.net.URLEncoder
 import java.util.Locale
 import javax.inject.Inject
 
-import akka.stream._
-import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Keep
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.stream.stage._
-import akka.util.ByteString
-import play.api.MarkerContexts.SecurityMarkerContext
-import play.api.http.HttpEntity
-import play.api.http.HttpErrorInfo
+import scala.concurrent.Future
+
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Keep
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.util.ByteString
 import play.api.http.HeaderNames._
+import play.api.http.HttpEntity
 import play.api.http.HttpErrorHandler.Attrs
+import play.api.http.HttpErrorInfo
 import play.api.http.SessionConfiguration
 import play.api.libs.crypto.CSRFTokenSigner
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
+import play.api.MarkerContexts.SecurityMarkerContext
 import play.core.parsers.Multipart
 import play.filters.cors.CORSFilter
 import play.filters.csrf.CSRF._
 import play.libs.typedmap.TypedKey
 import play.mvc.Http.RequestBuilder
-
-import scala.concurrent.Future
 
 /**
  * An action that provides CSRF protection.
@@ -65,8 +65,10 @@ class CSRFAction(
     def continue = next(request)
 
     // Only filter unsafe methods and content types
-    if (config.checkMethod(request.method) &&
-        (config.checkContentType(request.contentType) || csrfActionHelper.hasInvalidContentType(request))) {
+    if (
+      config.checkMethod(request.method) &&
+      (config.checkContentType(request.contentType) || csrfActionHelper.hasInvalidContentType(request))
+    ) {
       if (!csrfActionHelper.requiresCsrfCheck(request)) {
         continue
       } else {
@@ -166,32 +168,36 @@ class CSRFAction(
     // CSRF check failures are used by failing the stream with a NoTokenInBody exception.
     Accumulator(
       Flow[ByteString]
-        .via(new BodyHandler(config, { body =>
-          if (extractor(body, tokenName).fold(false)(tokenProvider.compareTokens(_, tokenFromHeader))) {
-            filterLogger.trace("[CSRF] Valid token found in body")
-            true
-          } else {
-            filterLogger.warn("[CSRF] Check failed because no or invalid token found in body for " + request.uri)(
-              SecurityMarkerContext
-            )
-            false
-          }
-        }))
+        .via(
+          new BodyHandler(
+            config,
+            { body =>
+              if (extractor(body, tokenName).fold(false)(tokenProvider.compareTokens(_, tokenFromHeader))) {
+                filterLogger.trace("[CSRF] Valid token found in body")
+                true
+              } else {
+                filterLogger.warn("[CSRF] Check failed because no or invalid token found in body for " + request.uri)(
+                  SecurityMarkerContext
+                )
+                false
+              }
+            }
+          )
+        )
         .splitWhen(_ => false)
         // TODO rewrite BodyHandler such that it emits sub-source then we can avoid all these dancing around
         .prefixAndTail(0)
         .map(_._2)
         .concatSubstreams
-        .toMat(Sink.head[Source[ByteString, _]])(Keep.right)
+        .toMat(Sink.head[Source[ByteString, ?]])(Keep.right)
     ).mapFuture { validatedBodySource =>
-        filterLogger.trace(s"[CSRF] running with validated body source")
-        action(request).run(validatedBodySource)
-      }
-      .recoverWith {
-        case NoTokenInBody =>
-          filterLogger.warn("[CSRF] Check failed with NoTokenInBody for " + request.uri)(SecurityMarkerContext)
-          csrfActionHelper.clearTokenIfInvalid(request, errorHandler, "No CSRF token found in body")
-      }
+      filterLogger.trace(s"[CSRF] running with validated body source")
+      action(request).run(validatedBodySource)
+    }.recoverWith {
+      case NoTokenInBody =>
+        filterLogger.warn("[CSRF] Check failed with NoTokenInBody for " + request.uri)(SecurityMarkerContext)
+        csrfActionHelper.clearTokenIfInvalid(request, errorHandler, "No CSRF token found in body")
+    }
   }
 
   /**
@@ -578,7 +584,7 @@ class CSRFActionHelper(
     // If the content type is none, but there's a content type header, that means
     // the content type failed to be parsed, therefore treat it like a blacklisted
     // content type just to be safe. Also, note we cannot use headers.hasHeader,
-    // because this is intercepted by the Akka HTTP wrapper and will only turn true
+    // because this is intercepted by the Pekko HTTP wrapper and will only turn true
     // if the content type was validly parsed.
     request.contentType.isEmpty && request.headers.toMap.contains(CONTENT_TYPE)
   }
@@ -592,8 +598,18 @@ class CSRFActionHelper(
 case class CSRFCheck @Inject() (
     config: CSRFConfig,
     tokenSigner: CSRFTokenSigner,
-    sessionConfiguration: SessionConfiguration
+    sessionConfiguration: SessionConfiguration,
+    errorHandler: ErrorHandler = CSRF.DefaultErrorHandler,
 ) {
+
+  // Java constructor for manually constructing
+  def this(
+      config: CSRFConfig,
+      tokenSigner: play.libs.crypto.CSRFTokenSigner,
+      sessionConfiguration: SessionConfiguration,
+      errorHandler: CSRFErrorHandler
+  ) = this(config, tokenSigner.asScala, sessionConfiguration, new JavaCSRFErrorHandlerAdapter(errorHandler))
+
   private class CSRFCheckAction[A](
       tokenProvider: TokenProvider,
       errorHandler: ErrorHandler,
@@ -606,8 +622,10 @@ case class CSRFCheck @Inject() (
       val request = csrfActionHelper.tagRequestFromHeader(untaggedRequest)
 
       // Maybe bypass
-      if (!csrfActionHelper.requiresCsrfCheck(request) ||
-          !(config.checkContentType(request.contentType) || csrfActionHelper.hasInvalidContentType(request))) {
+      if (
+        !csrfActionHelper.requiresCsrfCheck(request) ||
+        !(config.checkContentType(request.contentType) || csrfActionHelper.hasInvalidContentType(request))
+      ) {
         wrapped(request)
       } else {
         // Get token from header
@@ -623,8 +641,8 @@ case class CSRFCheck @Inject() (
                   case body: play.api.mvc.AnyContent if body.asFormUrlEncoded.isDefined => body.asFormUrlEncoded.get
                   case body: play.api.mvc.AnyContent if body.asMultipartFormData.isDefined =>
                     body.asMultipartFormData.get.asFormUrlEncoded
-                  case body: Map[_, _]                         => body.asInstanceOf[Map[String, Seq[String]]]
-                  case body: play.api.mvc.MultipartFormData[_] => body.asFormUrlEncoded
+                  case body: Map[?, ?]                         => body.asInstanceOf[Map[String, Seq[String]]]
+                  case body: play.api.mvc.MultipartFormData[?] => body.asFormUrlEncoded
                   case _                                       => Map.empty[String, Seq[String]]
                 }
                 form.get(config.tokenName).flatMap(_.headOption)
@@ -656,13 +674,7 @@ case class CSRFCheck @Inject() (
   /**
    * Wrap an action in a CSRF check.
    */
-  def apply[A](action: Action[A]): Action[A] =
-    new CSRFCheckAction(
-      new TokenProviderProvider(config, tokenSigner).get,
-      CSRF.DefaultErrorHandler,
-      action,
-      new CSRFActionHelper(sessionConfiguration, config, tokenSigner)
-    )
+  def apply[A](action: Action[A]): Action[A] = apply(action, errorHandler)
 }
 
 /**

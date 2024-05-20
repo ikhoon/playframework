@@ -4,9 +4,9 @@
 
 package play.api.cache.caffeine
 
-import akka.annotation.InternalApi
-
 import scala.concurrent.duration.Duration
+
+import org.apache.pekko.annotation.InternalApi
 
 @InternalApi
 private[caffeine] case class ExpirableCacheValue[V](value: V, durationMaybe: Option[Duration] = None)

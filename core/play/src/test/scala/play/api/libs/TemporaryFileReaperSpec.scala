@@ -5,14 +5,16 @@
 package play.api.libs
 
 import java.nio.charset.Charset
-import java.nio.file.Path
 import java.nio.file.{ Files => JFiles }
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 
-import akka.actor.ActorSystem
+import scala.language.postfixOps
+
 import com.typesafe.config.ConfigFactory
+import org.apache.pekko.actor.ActorSystem
 import org.specs2.concurrent.ExecutionEnv
 import org.specs2.mutable.Specification
 import org.specs2.specification.AfterAll
@@ -43,8 +45,8 @@ class TemporaryFileReaperSpec(implicit ee: ExecutionEnv) extends Specification w
       val config = TemporaryFileReaperConfiguration(
         enabled = false,
         olderThan = 1.seconds,
-        initialDelay = 0 seconds,
-        interval = 100 millis
+        initialDelay = 0.seconds,
+        interval = 100.millis
       )
 
       val file = parentDirectory.resolve("notcollected.txt")

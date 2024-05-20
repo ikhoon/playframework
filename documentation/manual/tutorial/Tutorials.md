@@ -6,41 +6,46 @@ Play's documentation shows the available features and how to use them, but the d
 
 Tutorials and examples are useful for showing a single application at work, especially when it comes to integrating with other systems such as databases or Javascript frameworks.
 
-The Play team uses [Lightbend Tech Hub](https://developer.lightbend.com/start/?group=play) to publish tutorials that cover a huge number of cases. There you can find projects in Java, Scala and for multiple versions of Play. You can pick one that demonstrates functionality of interest to you. The examples you can download cover the following topics:
+The [play-samples GitHub repository](https://github.com/playframework/play-samples/tree/3.0.x) offers Play examples that cover a huge number of cases. There you can find projects in Java, Scala and for multiple versions of Play. You can pick one that demonstrates functionality of interest to you. Make sure you have verified the [[requirements for running Play|Requirements]]. You can either clone the [play-samples GitHub repository](https://github.com/playframework/play-samples) or download its contents, which include all samples, [as a zip file](https://github.com/playframework/play-samples/archive/refs/heads/3.0.x.zip). Alternatively, for a more streamlined option, you can download individual samples as zip files from the list below. This is recommended, as these zip files exclude unnecessary files for building and testing the samples.
 
 ## Java
 
-| Example                                   | Download                                                                                 | Repository                                                                                       |
-|:------------------------------------------|:-----------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------|
-| Play Java gRPC Example                    | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-grpc-example)       | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-grpc-example/)       |
-| REST API Example                          | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-rest-api-example)   | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-rest-api-example/)   |
-| File Upload Example                       | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-fileupload-example) | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-fileupload-example/) |
-| Forms Example                             | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-forms-example)      | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-forms-example/)      |
-| JPA Example                               | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-jpa-example)        | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-jpa-example/)        |
-| Ebean Example                             | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-ebean-example)      | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-ebean-example/)      |
-| Websocket Example                         | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-websocket-example)  | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-websocket-example/)  |
-| Chatroom using Websockets Example         | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-chatroom-example)   | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-chatroom-example/)   |
-| Streaming Example                         | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-streaming-example)  | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-streaming-example/)  |
-| Compile Time Dependency Injection Example | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-compile-di-example) | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-compile-di-example/) |
-| Using Dagger 2 for Compile Time DI        | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-java-dagger2-example)    | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-java-dagger2-example/)    |
+| **Example**                               | **Download**                                                                                                                    |
+|:------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------|
+| Play Java Hello World Example             | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-hello-world-sbt-tutorial.zip) |
+| Play Java Starter Example                 | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-starter-sbt-example.zip)      |
+| Play Java gRPC Example                    | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-grpc-sbt-example.zip)         |
+| REST API Example                          | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-rest-api-sbt-example.zip)     |
+| File Upload Example                       | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-fileupload-sbt-example.zip)   |
+| Forms Example                             | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-forms-sbt-example.zip)        |
+| JPA Example                               | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-jpa-sbt-example.zip)          |
+| Ebean Example                             | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-ebean-sbt-example.zip)        |
+| Websocket Example                         | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-websocket-sbt-example.zip)    |
+| Chatroom using Websockets Example         | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-chatroom-sbt-example.zip)     |
+| Streaming Example                         | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-streaming-sbt-example.zip)    |
+| Compile Time Dependency Injection Example | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-compile-di-sbt-example.zip)   |
+| Using Dagger 2 for Compile Time DI        | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-java-dagger2-sbt-example.zip)      |
 
 ## Scala
 
-| Example                                    | Download                                                                                      | Repository                                                                                            |
-|:-------------------------------------------|:----------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------|
-| Play Scala gRPC Example                    | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-grpc-example)           | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-grpc-example/)           |
-| REST API Example                           | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-rest-api-example)       | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-rest-api-example/)       |
-| File Upload Example                        | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-fileupload-example)     | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-fileupload-example/)     |
-| Forms Example                              | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-forms-example)          | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-forms-example/)          |
-| Anorm Example                              | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-anorm-example)          | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-anorm-example/)          |
-| Integrated Slick Example                   | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-slick-example)          | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-slick-example/)          |
-| Isolated Slick Example                     | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-isolated-slick-example) | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-isolated-slick-example/) |
-| Websocket Example                          | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-websocket-example)      | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-websocket-example/)      |
-| Chatroom using Websockets Example          | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-chatroom-example)       | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-chatroom-example/)       |
-| Streaming Example                          | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-streaming-example)      | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-streaming-example/)      |
-| Compile Time Dependency Injection Example  | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-compile-di-example)     | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-compile-di-example/)     |
-| Dependency Injection using Macwire Example | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-macwire-di-example)     | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-macwire-di-example/)     |
-| Secure Session Example                     | [Download (zip)](https://example.lightbend.com/v1/download/play-samples-play-scala-secure-session-example) | [Github](https://github.com/playframework/play-samples/tree/2.8.x/play-scala-secure-session-example/) |
+| **Example**                                | **Download**                                                                                                                       |
+|:-------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------|
+| Play Scala Hello World Example             | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-hello-world-sbt-tutorial.zip)   |
+| Play Scala Starter Example                 | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-starter-sbt-example.zip)        |
+| Play Scala gRPC Example                    | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-grpc-sbt-example.zip)           |
+| REST API Example                           | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-rest-api-sbt-example.zip)       |
+| File Upload Example                        | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-fileupload-sbt-example.zip)     |
+| Forms Example                              | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-forms-sbt-example.zip)          |
+| Anorm Example                              | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-anorm-sbt-example.zip)          |
+| Integrated Slick Example                   | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-slick-sbt-example.zip)          |
+| Isolated Slick Example                     | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-isolated-slick-sbt-example.zip) |
+| Websocket Example                          | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-websocket-sbt-example.zip)      |
+| Chatroom using Websockets Example          | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-chatroom-sbt-example.zip)       |
+| Streaming Example                          | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-streaming-sbt-example.zip)      |
+| Compile Time Dependency Injection Example  | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-compile-di-sbt-example.zip)     |
+| Dependency Injection using Macwire Example | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-macwire-di-sbt-example.zip)     |
+| Secure Session Example                     | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-secure-session-sbt-example.zip) |
+| TLS Example                                | [Download (zip)](https://github.com/playframework/play-samples/releases/download/v3.0.x/play-scala-tls-sbt-example.zip)            |
 
 ## Third Party Tutorials and Templates
 
@@ -74,7 +79,7 @@ This is an incomplete list of several helpful blog posts, and because some of th
 * [Internationalization with Play Framework](https://blog.knoldus.com/internationalization-with-play-framework2-6-x/): Teena Vashist demonstrate how your application can support different languages using Play Framework 2.6.
 * [Authentication using Actions in Play Framework](https://blog.knoldus.com/authentication-using-actions-in-play-framework/): Geetika Gupta demonstrates how to use Action Composition to handle authentication in Play applications.
 * [Streaming data from PostgreSQL using Akka Streams and Slick in Play Framework](https://blog.knoldus.com/streaming-data-from-postgresql-using-akka-streams-and-slick-in-play-framework/): In this blog post, Sidharth Khattri explains the process wherein you can stream data directly from PostgreSQL database using Scala Slick (which is Scala’s database access/query library) and Akka Streams.
-* [Stream a file to AWS S3 using Akka Streams (via Alpakka) in Play Framework](https://blog.knoldus.com/stream-a-file-to-aws-s3-using-akka-streams-via-alpakka-in-play-framework/): In this blog post Sidharth Khattri explains how a file can be streamed from a client (eg: browser) to Amazon S3 using [Alpakka's](https://developer.lightbend.com/docs/alpakka/current/) AWS [S3 connector](https://developer.lightbend.com/docs/alpakka/current/s3.html).
+* [Stream a file to AWS S3 using Akka Streams (via Alpakka) in Play Framework](https://blog.knoldus.com/stream-a-file-to-aws-s3-using-akka-streams-via-alpakka-in-play-framework/): In this blog post Sidharth Khattri explains how a file can be streamed from a client (eg: browser) to Amazon S3 using [Alpakka's](https://doc.akka.io/docs/alpakka/current/) AWS [S3 connector](https://doc.akka.io/docs/alpakka/current/s3.html).
 
 ### 2.5.x
 
@@ -99,10 +104,6 @@ A tutorial video series by Radix Code provides an initial overview to Play, walk
 * [Akka Streams integration in Play Framework 2.5](https://loicdescotte.github.io/posts/play25-akka-streams/) by Loïc Descotte.
 * [Playing with Akka Streams and Twitter](https://loicdescotte.github.io/posts/play-akka-streams-twitter/) by Loïc Descotte.
 
-#### Database
-
-* [Play Database Application using Slick, Bootstrap](https://www.lightbend.com/activator/template/activator-play-slick-app): This is an example project for showcasing best practices and providing a seed for starting with Play &amp; Slick, By [Knoldus](https://www.knoldus.com/home.knol).
-
 #### Forms and Validators
 
 * [Controller Forms](http://queirozf.com/entries/play2-scala-forms-and-validations): This provides examples of using forms and custom validators within a controller.
@@ -110,7 +111,6 @@ A tutorial video series by Radix Code provides an initial overview to Play, walk
 
 #### REST APIs
 
-* [Making a REST API in Play](https://github.com/playframework/play-rest-api), a multi-part guide using the Scala API, by the Lightbend Play Team.
 * [Play API REST Template](https://github.com/adrianhurt/play-api-rest-seed) by Adrianhurt: shows how to implement a complete Json RESTful API with some characteristics such as Authentication Token, pagination, filtering, sorting and searching and optional enveloping.
 
 #### Sub-projects

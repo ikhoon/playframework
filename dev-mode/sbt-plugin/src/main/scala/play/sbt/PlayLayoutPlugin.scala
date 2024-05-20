@@ -6,9 +6,10 @@ package play.sbt
 
 import sbt._
 import sbt.Keys._
-import play.twirl.sbt.Import.TwirlKeys
-import com.typesafe.sbt.web.SbtWeb.autoImport._
+
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
+import com.typesafe.sbt.web.SbtWeb.autoImport._
+import play.twirl.sbt.Import.TwirlKeys
 
 /**
  * Play layout plugin to switch to the traditional Play web app layout instead of the standard Maven layout.
@@ -21,20 +22,20 @@ object PlayLayoutPlugin extends AutoPlugin {
   override def trigger = allRequirements
 
   override def projectSettings = Seq(
-    target := baseDirectory.value / "target",
-    Compile / sourceDirectory := baseDirectory.value / "app",
-    Test / sourceDirectory := baseDirectory.value / "test",
-    Compile / resourceDirectory := baseDirectory.value / "conf",
-    Compile / scalaSource := baseDirectory.value / "app",
-    Test / scalaSource := baseDirectory.value / "test",
-    Compile / javaSource := baseDirectory.value / "app",
-    Test / javaSource := baseDirectory.value / "test",
+    target                                                   := baseDirectory.value / "target",
+    Compile / sourceDirectory                                := baseDirectory.value / "app",
+    Test / sourceDirectory                                   := baseDirectory.value / "test",
+    Compile / resourceDirectory                              := baseDirectory.value / "conf",
+    Compile / scalaSource                                    := baseDirectory.value / "app",
+    Test / scalaSource                                       := baseDirectory.value / "test",
+    Compile / javaSource                                     := baseDirectory.value / "app",
+    Test / javaSource                                        := baseDirectory.value / "test",
     Compile / TwirlKeys.compileTemplates / sourceDirectories := Seq((Compile / sourceDirectory).value),
-    Test / TwirlKeys.compileTemplates / sourceDirectories := Seq((Test / sourceDirectory).value),
+    Test / TwirlKeys.compileTemplates / sourceDirectories    := Seq((Test / sourceDirectory).value),
     // sbt-web
-    Assets / sourceDirectory := (Compile / sourceDirectory).value / "assets",
+    Assets / sourceDirectory     := (Compile / sourceDirectory).value / "assets",
     TestAssets / sourceDirectory := (Test / sourceDirectory).value / "assets",
-    Assets / resourceDirectory := baseDirectory.value / "public",
+    Assets / resourceDirectory   := baseDirectory.value / "public",
     // Native packager
     Universal / sourceDirectory := baseDirectory.value / "dist"
   )

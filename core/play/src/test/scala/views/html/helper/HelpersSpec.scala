@@ -4,16 +4,16 @@
 
 package views.html.helper
 
+import java.util.Optional
+
 import org.specs2.mutable.Specification
-import play.api.Configuration
-import play.api.Environment
-import play.api.data.Forms._
 import play.api.data._
+import play.api.data.Forms._
 import play.api.http.HttpConfiguration
 import play.api.i18n._
+import play.api.Configuration
+import play.api.Environment
 import play.twirl.api.Html
-
-import java.util.Optional
 
 class HelpersSpec extends Specification {
   import FieldConstructor.defaultField
@@ -32,7 +32,7 @@ class HelpersSpec extends Specification {
       body must contain(idAttr)
 
       // Make sure it doesn't have it twice, issue #478
-      body.substring(body.indexOf(idAttr) + idAttr.length) must not contain (idAttr)
+      body.substring(body.indexOf(idAttr) + idAttr.length) must not contain idAttr
     }
 
     "default to a type of text" in {
@@ -46,20 +46,20 @@ class HelpersSpec extends Specification {
       body must contain(typeAttr)
 
       // Make sure it doesn't contain it twice
-      body.substring(body.indexOf(typeAttr) + typeAttr.length) must not contain (typeAttr)
+      body.substring(body.indexOf(typeAttr) + typeAttr.length) must not contain typeAttr
     }
   }
 
   "@checkbox" should {
     "translate the _text argument" in {
-      val form = Form(single("foo"                           -> Forms.list(Forms.text)))
+      val form = Form(single("foo" -> Forms.list(Forms.text)))
       val body = checkbox.apply(form("foo"), Symbol("_text") -> "myfieldlabel").body
 
       body must contain("""<span>I am the &lt;b&gt;label&lt;/b&gt; of the field</span>""")
     }
 
     "translate the _text argument but keep raw html" in {
-      val form = Form(single("foo"                           -> Forms.list(Forms.text)))
+      val form = Form(single("foo" -> Forms.list(Forms.text)))
       val body = checkbox.apply(form("foo"), Symbol("_text") -> Html("myfieldlabel")).body
 
       body must contain("""<span>I am the <b>label</b> of the field</span>""")
@@ -88,7 +88,7 @@ class HelpersSpec extends Specification {
       body must contain(idAttr)
 
       // Make sure it doesn't have it twice, issue #478
-      body.substring(body.indexOf(idAttr) + idAttr.length) must not contain (idAttr)
+      body.substring(body.indexOf(idAttr) + idAttr.length) must not contain idAttr
     }
 
     "allow setting custom data attributes" in {
@@ -100,7 +100,7 @@ class HelpersSpec extends Specification {
       body must contain(dataTestAttr)
 
       // Make sure it doesn't have it twice, issue #478
-      body.substring(body.indexOf(dataTestAttr) + dataTestAttr.length) must not contain (dataTestAttr)
+      body.substring(body.indexOf(dataTestAttr) + dataTestAttr.length) must not contain dataTestAttr
     }
 
     "Work as a simple select" in {
@@ -164,7 +164,7 @@ class HelpersSpec extends Specification {
 
   "@repeat" should {
     val form = Form(single("foo" -> Forms.seq(Forms.text)))
-    def renderFoo(form: Form[_], min: Int = 1) =
+    def renderFoo(form: Form[?], min: Int = 1) =
       repeat
         .apply(form("foo"), min) { f => Html(f.name + ":" + f.value.getOrElse("")) }
         .map(_.toString)
@@ -180,7 +180,7 @@ class HelpersSpec extends Specification {
           )
       )
     )
-    def renderComplex(form: Form[_], min: Int = 1) =
+    def renderComplex(form: Form[?], min: Int = 1) =
       repeat
         .apply(form("foo"), min) { f =>
           val a = f("a")
@@ -396,9 +396,8 @@ class HelpersSpec extends Specification {
     }
 
     "don't display an error when _error is supplied but is None" in {
-      inputText.apply(Form(single("foo" -> Forms.text))("foo"), Symbol("_error") -> None).body must not contain (
+      inputText.apply(Form(single("foo" -> Forms.text))("foo"), Symbol("_error") -> None).body must not contain
         """class="error""""
-      )
     }
   }
 }

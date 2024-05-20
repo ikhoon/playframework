@@ -13,7 +13,7 @@ To build Play, you need to have [sbt](https://www.scala-sbt.org/) installed.
 From the shell, first checkout the Play source:
 
 ```bash
-$ git clone git://github.com/playframework/playframework.git
+$ git clone git@github.com:playframework/playframework.git
 ```
 
 Checkout the branch you want, `main` is the current development branch, while stable branches for major releases are named with a `.x`, for example, `2.8.x`.
@@ -39,7 +39,7 @@ This will build and publish Play for the default Scala version. If you want to p
 Or to publish for a specific Scala version:
 
 ```bash
-> ++ 2.13.10 publishLocal
+> ++ 2.13.14 publishLocal
 ```
 
 ## Build the documentation
@@ -74,8 +74,8 @@ When you publish Play locally, it will publish a snapshot version to your local 
 Navigate to your existing Play project and make the following edits in `project/plugins.sbt`:
 
 ```scala
-// Change the sbt plugin to use the local Play build (2.8.0-SNAPSHOT)
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.8.0-SNAPSHOT")
+// Change the sbt plugin to use the local Play build (3.0.0-SNAPSHOT)
+addSbtPlugin("org.playframework" % "sbt-plugin" % "3.0.0-SNAPSHOT")
 ```
 
 Once you have done this, you can start the console and interact with your project normally:

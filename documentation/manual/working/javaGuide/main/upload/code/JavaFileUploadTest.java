@@ -2,16 +2,15 @@
  * Copyright (C) from 2022 The Play Framework Contributors <https://github.com/playframework>, 2011-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import akka.stream.javadsl.FileIO;
-import akka.stream.javadsl.Source;
-import akka.util.ByteString;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collections;
-import org.hamcrest.CoreMatchers;
+import org.apache.pekko.stream.javadsl.FileIO;
+import org.apache.pekko.stream.javadsl.Source;
+import org.apache.pekko.util.ByteString;
 import org.junit.Test;
 import play.Application;
 import play.inject.guice.GuiceApplicationBuilder;
@@ -55,8 +54,8 @@ public class JavaFileUploadTest extends WithApplication {
 
     Result result = Helpers.route(app, request);
     String content = Helpers.contentAsString(result);
-    // ###replace:     assertThat(content, CoreMatchers.equalTo("File uploaded"));
-    assertThat(content, CoreMatchers.containsString("Action Not Found"));
+    // ###replace:     assertThat(content).isEqualTo("File uploaded");
+    assertThat(content).contains("Action Not Found");
   }
   // #testSyncUpload
 

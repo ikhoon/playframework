@@ -2,7 +2,7 @@
 
 # Play 2.8 Migration Guide
 
-This guide is for migrating from Play 2.7 to Play 2.8. See the [[Play 2.7 Migration Guide|Migration27]] to upgrade from Play 2.6. It is also recommended to read [Akka 2.5 to 2.6 migration guide](https://doc.akka.io/docs/akka/2.6.0-M5/project/migration-guide-2.5.x-2.6.x.html) since multiple changes there have an impact on Play 2.8.
+This guide is for migrating from Play 2.7 to Play 2.8. See the [[Play 2.7 Migration Guide|Migration27]] to upgrade from Play 2.6. It is also recommended to read [Akka 2.5 to 2.6 migration guide](https://doc.akka.io/docs/akka/2.6/project/migration-guide-2.5.x-2.6.x.html) since multiple changes there have an impact on Play 2.8.
 
 ## How to migrate
 
@@ -47,14 +47,14 @@ Play 2.8 support Scala 2.12 and 2.13, but not 2.11, which has reached its end of
 To set the Scala version in sbt, simply set the `scalaVersion` key, for example:
 
 ```scala
-scalaVersion := "2.13.10"
+scalaVersion := "2.13.14"
 ```
 
 If you have a single project build, then this setting can just be placed on its own line in `build.sbt`.  However, if you have a multi-project build, then the scala version setting must be set on each project.  Typically, in a multi-project build, you will have some common settings shared by every project, this is the best place to put the setting, for example:
 
 ```scala
 def commonSettings = Seq(
-  scalaVersion := "2.13.10"
+  scalaVersion := "2.13.14"
 )
 
 val projectA = (project in file("projectA"))
@@ -68,7 +68,7 @@ val projectB = (project in file("projectB"))
 
 ### File serving methods changed the type of their `filename` parameters
 
-Methods for serving files, like `ok(File content, ...)` (and similar) in the [Java API](api/java/play/mvc/Results.html#ok-java.io.File-) or `sendFile`, `sendPath` and `sendResource` in both Java's  [`StatusHeader`](api/java/play/mvc/StatusHeader.html) and Scala's [`Status`](api/scala/play/api/mvc/Results$Status.html) class changed the type of their `filename` parameters: Instead of using a plain `String`, the Scala API now uses an `Option[String]` as return type for its `filename` parameter function. The Java API changed the parameter type to be an `Optional<String>`.
+Methods for serving files, like `ok(File content, ...)` (and similar) in the [Java API](api/java/play/mvc/Results.html#ok\(java.io.File\)) or `sendFile`, `sendPath` and `sendResource` in both Java's  [`StatusHeader`](api/java/play/mvc/StatusHeader.html) and Scala's [`Status`](api/scala/play/api/mvc/Results$Status.html) class changed the type of their `filename` parameters: Instead of using a plain `String`, the Scala API now uses an `Option[String]` as return type for its `filename` parameter function. The Java API changed the parameter type to be an `Optional<String>`.
 This API change better reflects the fact that you can pass `None` / `Optional.empty()` if you don't want the `Content-Disposition` header to include a filename.
 
 ### The `Headers` class of the Java API is immutable
@@ -151,7 +151,7 @@ There are changes related to how Akka Streams handle errors for `FileIO.toPath`,
 
 ### Configuration loading changes
 
-Until Play 2.7, when loading configuration, Play was not considering the default [Java System Properties](https://docs.oracle.com/javase/tutorial/essential/environment/sysprop.html) if the user provides some properties. Now, System Properties are always considered, meaning you can reference them in your `application.conf` file even if you are also defining custom properties. For example, when [[embedding Play|ScalaEmbeddingPlayAkkaHttp]] like the code below, both `userProperties` and System Properties are used:
+Until Play 2.7, when loading configuration, Play was not considering the default [Java System Properties](https://docs.oracle.com/javase/tutorial/essential/environment/sysprop.html) if the user provides some properties. Now, System Properties are always considered, meaning you can reference them in your `application.conf` file even if you are also defining custom properties. For example, when [embedding Play](https://www.playframework.com/documentation/2.8.x/ScalaEmbeddingPlayAkkaHttp) like the code below, both `userProperties` and System Properties are used:
 
 ```scala
 import java.util.Properties
@@ -215,7 +215,7 @@ User's accept-language `en-GB` matches `en`. The play app responds English page.
 
 Play comes with two [[server backends|Server]]:
 
-* [[Akka HTTP|AkkaHttpServer]] (the default), which [[can be configured|SettingsAkkaHttp]] via `play.server.akka.*`
+* [Akka HTTP](https://www.playframework.com/documentation/2.8.x/AkkaHttpServer) (the default), which [can be configured](https://www.playframework.com/documentation/2.8.x/SettingsAkkaHttp) via `play.server.akka.*`
 * [[Netty|NettyServer]], which [[can be configured|SettingsNetty]] via `play.server.netty.*`.
 
 Until now, we kept these configurations separate, even if there were settings that applied to both backends and therefore were conclusively duplicates.
@@ -240,7 +240,7 @@ Starting with Play 2.8 however, when the computed header ends up being _exactly_
 
 Therefore, this change should not affect you at all, since all browsers adhere to the specs and do not treat this header in any special way but to render content inline, like no header was send.
 
-If you still want to send this exact header however, you can still do that by using the `withHeader(s)` methods from [`Scala's`](api/scala/play/api/mvc/Result.html#withHeaders\(headers:\(String,String\)*\):play.api.mvc.Result) or [`Java's`](api/java/play/mvc/Result.html#withHeader-java.lang.String-java.lang.String-) `Result` class.
+If you still want to send this exact header however, you can still do that by using the `withHeader(s)` methods from [`Scala's`](api/scala/play/api/mvc/Result.html#withHeaders\(headers:\(String,String\)*\):play.api.mvc.Result) or [`Java's`](api/java/play/mvc/Result.html#withHeader\(java.lang.String,java.lang.String\)) `Result` class.
 
 ## Dependency graph changes
 

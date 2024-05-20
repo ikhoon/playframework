@@ -14,7 +14,7 @@ Although it's possible to increase the number of threads in the default executio
 
 Because of the way Play works, action code must be as fast as possible, i.e., non-blocking. So what should we return from our action if we are not yet able to compute the result? We should return the *promise* of a result!
 
-Java 8 provides a generic promise API called [`CompletionStage`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletionStage.html).  A `CompletionStage<Result>` will eventually be redeemed with a value of type `Result`. By using a `CompletionStage<Result>` instead of a normal `Result`, we are able to return from our action quickly without blocking anything.  Play will then serve the result as soon as the promise is redeemed.
+Java 8 and newer provides a generic promise API called [`CompletionStage`](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/CompletionStage.html).  A `CompletionStage<Result>` will eventually be redeemed with a value of type `Result`. By using a `CompletionStage<Result>` instead of a normal `Result`, we are able to return from our action quickly without blocking anything.  Play will then serve the result as soon as the promise is redeemed.
 
 ## How to create a `CompletionStage<Result>`
 
@@ -22,7 +22,7 @@ To create a `CompletionStage<Result>` we need another promise first: the promise
 
 @[promise-pi](code/javaguide/async/JavaAsync.java)
 
-Play asynchronous API methods give you a `CompletionStage`. This is the case when you are calling an external web service using the `play.libs.WS` API, or if you are using Akka to schedule asynchronous tasks or to communicate with Actors using `play.libs.Akka`.
+Play asynchronous API methods give you a `CompletionStage`. This is the case when you are calling an external web service using the `play.libs.WS` API, or if you are using Pekko to schedule asynchronous tasks or to communicate with Actors using `play.libs.Pekko`.
 
 In this case, using `CompletionStage.thenApply` will execute the completion stage in the same calling thread as the previous task.  This is fine when you have a small amount of CPU bound logic with no blocking.
 
@@ -34,31 +34,31 @@ Using `supplyAsync` creates a new task which will be placed on the fork join poo
 
 > Only the "\*Async" methods from `CompletionStage` provide asynchronous execution.
 
-## Using HttpExecutionContext
+## Using ClassLoaderExecutionContext
 
-You must supply the HTTP execution context explicitly as an executor when using a Java `CompletionStage` inside an [[Action|JavaActions]], to ensure that the classloader remains in scope.
+You must supply the classloader execution context explicitly as an executor when using a Java `CompletionStage` inside an [[Action|JavaActions]], to ensure that the classloader remains in scope.
 
-You can supply the [`play.libs.concurrent.HttpExecutionContext`](api/java/play/libs/concurrent/HttpExecutionContext.html) instance through dependency injection:
+You can supply the [`play.libs.concurrent.ClassLoaderExecutionContext`](api/java/play/libs/concurrent/ClassLoaderExecutionContext.html) instance through dependency injection:
 
-@[http-execution-context](../../../commonGuide/configuration/code/detailedtopics/httpec/MyController.java)
+@[cl-execution-context](../../../commonGuide/configuration/code/detailedtopics/clec/MyController.java)
 
-Please see [[Class loaders|ThreadPools#Class loaders]] for more information on using `HttpExecutionContext`.
+Please see [[Class loaders|ThreadPools#Class-loaders]] for more information on using `ClassLoaderExecutionContext`.
 
-## Using CustomExecutionContext and HttpExecution
+## Using CustomExecutionContext and ClassLoaderExecution
 
-Using a `CompletionStage` or an `HttpExecutionContext` is only half of the picture though! At this point you are still on Play's default ExecutionContext.  If you are calling out to a blocking API such as JDBC, then you still will need to have your ExecutionStage run with a different executor, to move it off Play's rendering thread pool.  You can do this by creating a subclass of [`play.libs.concurrent.CustomExecutionContext`](api/java/play/libs/concurrent/CustomExecutionContext.html) with a reference to the [custom dispatcher](https://doc.akka.io/docs/akka/2.6/dispatchers.html?language=java).
+Using a `CompletionStage` or an `ClassLoaderExecutionContext` is only half of the picture though! At this point you are still on Play's default ExecutionContext.  If you are calling out to a blocking API such as JDBC, then you still will need to have your ExecutionStage run with a different executor, to move it off Play's rendering thread pool.  You can do this by creating a subclass of [`play.libs.concurrent.CustomExecutionContext`](api/java/play/libs/concurrent/CustomExecutionContext.html) with a reference to the [custom dispatcher](https://pekko.apache.org/docs/pekko/1.0/dispatchers.html?language=java).
 
 Add the following imports:
 
-@[async-explicit-ec-imports](code/javaguide/async/controllers/Application.java)
+@[async-explicit-cl-imports](code/javaguide/async/controllers/Application.java)
 
 Define a custom execution context:
 
 @[custom-execution-context](code/javaguide/async/controllers/MyExecutionContext.java)
 
-You will need to define a custom dispatcher in `application.conf`, which is done [through Akka dispatcher configuration](https://doc.akka.io/docs/akka/2.6/dispatchers.html?language=java#setting-the-dispatcher-for-an-actor).
+You will need to define a custom dispatcher in `application.conf`, which is done [through Pekko dispatcher configuration](https://pekko.apache.org/docs/pekko/1.0/dispatchers.html?language=java#setting-the-dispatcher-for-an-actor).
 
-Once you have the custom dispatcher, add in the explicit executor and wrap it with [`HttpException.fromThread`](api/java/play/libs/concurrent/HttpExecution.html#fromThread-java.util.concurrent.Executor-):
+Once you have the custom dispatcher, add in the explicit executor and wrap it with [`ClassLoaderExecution.fromThread`](api/java/play/libs/concurrent/ClassLoaderExecution.html#fromThread\(java.util.concurrent.Executor\)):
 
 @[async-explicit-ec](code/javaguide/async/controllers/Application.java)
 

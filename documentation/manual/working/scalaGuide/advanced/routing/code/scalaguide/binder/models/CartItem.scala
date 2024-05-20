@@ -5,11 +5,13 @@
 package scalaguide.binder.models
 
 import java.net.URLEncoder
+
 import scala.Left
 import scala.Right
+
 import play.api.mvc.PathBindable
-import play.Logger
 import play.api.mvc.QueryStringBindable
+import play.Logger
 
 //#declaration
 case class CartItem(identifier: String) {}
@@ -27,13 +29,13 @@ object CartItem {
           }
         }
       }
-      //#unbind
+      // #unbind
       override def unbind(key: String, cartItem: CartItem): String = {
         // If we don't use Play's QueryStringBindable[String].unbind() for some reason, we need to construct the result string manually.
         // The key is constant and does not contain any special character, but
         // value may contain special characters => need form URL encoding for cartItem.identifier:
         "identifier=" + URLEncoder.encode(cartItem.identifier, "utf-8")
       }
-      //#unbind
+      // #unbind
     }
 }

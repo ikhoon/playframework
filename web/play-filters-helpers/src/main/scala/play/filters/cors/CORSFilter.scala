@@ -4,18 +4,19 @@
 
 package play.filters.cors
 
-import akka.stream.Materializer
-import akka.util.ByteString
+import scala.jdk.CollectionConverters._
+
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
 import play.api.http.DefaultHttpErrorHandler
 import play.api.http.HttpErrorHandler
-import play.core.j.JavaContextComponents
-import play.core.j.JavaHttpErrorHandlerAdapter
-
-import scala.jdk.CollectionConverters._
-import play.api.Logger
 import play.api.libs.streams.Accumulator
 import play.api.libs.typedmap.TypedKey
 import play.api.mvc._
+import play.api.Logger
+import play.api.LoggerLike
+import play.core.j.JavaContextComponents
+import play.core.j.JavaHttpErrorHandlerAdapter
 
 /**
  * A play.api.mvc.Filter that implements Cross-Origin Resource Sharing (CORS)
@@ -74,7 +75,7 @@ class CORSFilter(
     )
   }
 
-  protected override val logger = Logger(classOf[CORSFilter])
+  protected override val logger: LoggerLike = Logger(classOf[CORSFilter])
 
   override def apply(next: EssentialAction): EssentialAction = new EssentialAction {
     override def apply(request: RequestHeader): Accumulator[ByteString, Result] = {

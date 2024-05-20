@@ -4,21 +4,21 @@
 
 package play.api.libs.streams
 
-import akka.NotUsed
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.stream.Materializer
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.jdk.FutureConverters._
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.NotUsed
 import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
 import org.specs2.mutable.Specification
-
-import scala.jdk.FutureConverters._
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 
 class AccumulatorSpec extends Specification {
   def withMaterializer[T](block: Materializer => T): T = {
@@ -35,7 +35,7 @@ class AccumulatorSpec extends Specification {
   def await[T](f: Future[T]): T = Await.result(f, 10.seconds)
   def error[T](any: Any): T     = throw sys.error("error")
   def errorSource[T]: Source[T, NotUsed] =
-    Source.fromPublisher((s: Subscriber[_ >: T]) =>
+    Source.fromPublisher((s: Subscriber[? >: T]) =>
       s.onSubscribe(new Subscription {
         def cancel(): Unit         = s.onComplete()
         def request(n: Long): Unit = s.onError(new RuntimeException("error"))

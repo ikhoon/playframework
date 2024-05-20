@@ -6,28 +6,28 @@ package play.api.mvc
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import org.specs2.mutable.Specification
-import org.specs2.specification.AfterAll
-import org.specs2.specification.core.Fragment
-import play.api.data.Form
-import play.api.data.Forms.of
-import play.api.data.format.Formats.stringFormat
-import play.api.http.HeaderNames
-import play.api.http.Status
-import play.api.libs.streams.Accumulator
-import play.core.test.FakeRequest
-
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Try
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.specs2.mutable.Specification
+import org.specs2.specification.core.Fragment
+import org.specs2.specification.AfterAll
+import play.api.data.format.Formats.stringFormat
+import play.api.data.Form
+import play.api.data.Forms.of
+import play.api.http.HeaderNames
+import play.api.http.Status
+import play.api.libs.streams.Accumulator
+import play.core.test.FakeRequest
 
 /**
  * All tests relating to max length handling
@@ -57,13 +57,16 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       Sink
         .seq[ByteString]
         .mapMaterializedValue(future =>
-          future.transform({ bytes =>
-            bodyParsed.success(())
-            Right(bytes.fold(ByteString.empty)(_ ++ _))
-          }, { t =>
-            bodyParsed.failure(t)
-            t
-          })
+          future.transform(
+            { bytes =>
+              bodyParsed.success(())
+              Right(bytes.fold(ByteString.empty)(_ ++ _))
+            },
+            { t =>
+              bodyParsed.failure(t)
+              t
+            }
+          )
         )
     )
     (parser, bodyParsed.future)
@@ -74,10 +77,13 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       food: ByteString = Body15,
       ai: AtomicInteger = new AtomicInteger
   ): A = {
-    Await.result(accumulator.run(Source.fromIterator(() => {
-      ai.incrementAndGet()
-      food.grouped(3)
-    })), 5.seconds)
+    Await.result(
+      accumulator.run(Source.fromIterator(() => {
+        ai.incrementAndGet()
+        food.grouped(3)
+      })),
+      5.seconds
+    )
   }
 
   def assertDidNotParse(parsed: Future[Unit]) = {
@@ -87,7 +93,7 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
     }
   }
 
-  def enforceMaxLengthEnforced(result: Either[Result, _]) = {
+  def enforceMaxLengthEnforced(result: Either[Result, ?]) = {
     result must beLeft[Result].which { inner => inner.header.status must_== Status.REQUEST_ENTITY_TOO_LARGE }
   }
 
@@ -147,7 +153,7 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       val result = feed(
         parse.maxLength(MaxLength20, BodyParser(req => parse.enforceMaxLength(req, MaxLength20, parser))).apply(req)
       )
-      result must beRight.which { inner => inner must beRight(Body15) }
+      result must beRight.which { inner => inner must beRight(===(Body15)) }
       Await.result(parsed, 5.seconds) must_== (())
     }
 
@@ -181,7 +187,8 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       (parse.temporaryFile(maxLength = MaxLength15), None, Body15),
     )
     // maxLength body parser needs special treatment because it uses Either[MaxSizeExceeded,...] instead of Either[Result,...]
-    val maxLengthParser = parse.maxLength(MaxLength15, BodyParser(req => bodyParser._1)) // bodyParser._1 does not matter really
+    val maxLengthParser =
+      parse.maxLength(MaxLength15, BodyParser(req => bodyParser._1)) // bodyParser._1 does not matter really
 
     "not run body parser when existing Content-Length header exceeds maxLength " in {
       Fragment.foreach(bodyParsers) { bodyParser =>
@@ -233,7 +240,7 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       maxLengthParser.toString() in {
         val ai     = new AtomicInteger()
         val result = feed(maxLengthParser.apply(reqCLH15), food = Body15, ai = ai)
-        result must beRight.which { inner => inner must beRight(Body15) }
+        result must beRight.which { inner => inner must beRight(===(Body15)) }
         ai.get must_== 1 // makes sure parsing took place
       }
     }
@@ -258,7 +265,7 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
       maxLengthParser.toString() in {
         val ai     = new AtomicInteger()
         val result = feed(maxLengthParser.apply(req), food = Body15, ai = ai)
-        result must beRight.which { inner => inner must beRight(Body15) }
+        result must beRight.which { inner => inner must beRight(===(Body15)) }
         ai.get must_== 1 // makes sure parsing took place
       }
     }
@@ -281,8 +288,13 @@ class MaxLengthBodyParserSpec extends Specification with AfterAll {
 
       // special treatment for maxLength
       maxLengthParser.toString() in {
-        val ai     = new AtomicInteger()
-        val result = feed(maxLengthParser.apply(req), food = ByteString(" ") ++ Body15, ai = ai) // prepend space to exceed maxLength by one byte
+        val ai = new AtomicInteger()
+        val result =
+          feed(
+            maxLengthParser.apply(req),
+            food = ByteString(" ") ++ Body15,
+            ai = ai
+          )                                          // prepend space to exceed maxLength by one byte
         maxLengthParserEnforced(result, MaxLength15) // parser realised body is too large
         ai.get must_== 1                             // makes sure parsing took place
       }

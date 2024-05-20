@@ -4,16 +4,17 @@
 
 package play.api.db
 
-import com.typesafe.config.Config
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import play.api._
-import play.api.inject._
-import play.db.NamedDatabaseImpl
 
 import scala.concurrent.Future
 import scala.util.Try
+
+import com.typesafe.config.Config
+import play.api._
+import play.api.inject._
+import play.db.NamedDatabaseImpl
 
 /**
  * DB runtime inject module.
@@ -24,11 +25,11 @@ final class DBModule
         bind[Database].qualifiedWith(new NamedDatabaseImpl(name))
       }
 
-      def namedDatabaseBindings(dbs: Set[String]): Seq[Binding[_]] = dbs.toSeq.map { db =>
+      def namedDatabaseBindings(dbs: Set[String]): Seq[Binding[?]] = dbs.toSeq.map { db =>
         bindNamed(db).to(new NamedDatabaseProvider(db))
       }
 
-      def defaultDatabaseBinding(default: String, dbs: Set[String]): Seq[Binding[_]] = {
+      def defaultDatabaseBinding(default: String, dbs: Set[String]): Seq[Binding[?]] = {
         if (dbs.contains(default)) Seq(bind[Database].to(bindNamed(default))) else Nil
       }
 

@@ -9,9 +9,8 @@ import java.time._
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-import play.api.data._
-
 import annotation.implicitNotFound
+import play.api.data._
 
 /**
  * Handles field binding and unbinding.
@@ -54,8 +53,8 @@ object Formats {
    * @param value As we ignore this parameter in binding/unbinding we have to provide a default value.
    */
   def ignoredFormat[A](value: A): Formatter[A] = new Formatter[A] {
-    def bind(key: String, data: Map[String, String]) = Right(value)
-    def unbind(key: String, value: A)                = Map.empty
+    def bind(key: String, data: Map[String, String]): Either[Seq[FormError], A] = Right(value)
+    def unbind(key: String, value: A): Map[String, String]                      = Map.empty
   }
 
   /**
@@ -104,7 +103,7 @@ object Formats {
   private def numberFormatter[T](convert: String => T, real: Boolean = false): Formatter[T] = {
     val (formatString, errorString) = if (real) ("format.real", "error.real") else ("format.numeric", "error.number")
     new Formatter[T] {
-      override val format = Some(formatString -> Nil)
+      override val format: Option[(String, Seq[Any])] = Some(formatString -> Nil)
       def bind(key: String, data: Map[String, String]) =
         parsing(convert, errorString, Nil)(key, data)
       def unbind(key: String, value: T) = Map(key -> value.toString)
@@ -145,7 +144,7 @@ object Formats {
    * Default formatter for the `BigDecimal` type.
    */
   def bigDecimalFormat(precision: Option[(Int, Int)]): Formatter[BigDecimal] = new Formatter[BigDecimal] {
-    override val format = Some(("format.real", Nil))
+    override val format: Option[(String, Seq[Any])] = Some(("format.real", Nil))
 
     def bind(key: String, data: Map[String, String]) = {
       Formats.stringFormat.bind(key, data).flatMap { s =>
@@ -154,13 +153,13 @@ object Formats {
           .either {
             val bd = BigDecimal(s)
             precision
-              .map({
+              .map {
                 case (p, s) =>
                   if (bd.precision - bd.scale > p - s) {
                     throw new java.lang.ArithmeticException("Invalid precision")
                   }
                   bd.setScale(s)
-              })
+              }
               .getOrElse(bd)
           }
           .left
@@ -193,7 +192,7 @@ object Formats {
    * Default formatter for the `Boolean` type.
    */
   implicit def booleanFormat: Formatter[Boolean] = new Formatter[Boolean] {
-    override val format = Some(("format.boolean", Nil))
+    override val format: Option[(String, Seq[Any])] = Some(("format.boolean", Nil))
 
     def bind(key: String, data: Map[String, String]) = {
       Right(data.getOrElse(key, "false")).flatMap {
@@ -224,7 +223,7 @@ object Formats {
       Date.from(instant.withZoneSameLocal(javaTimeZone).toInstant)
     }
 
-    override val format = Some(("format.date", Seq(pattern)))
+    override val format: Option[(String, Seq[Any])] = Some(("format.date", Seq(pattern)))
 
     def bind(key: String, data: Map[String, String]) = parsing(dateParse, "error.date", Nil)(key, data)
 
@@ -244,7 +243,7 @@ object Formats {
   def sqlDateFormat(pattern: String): Formatter[java.sql.Date] = new Formatter[java.sql.Date] {
     private val dateFormatter: Formatter[LocalDate] = localDateFormat(pattern)
 
-    override val format = Some(("format.date", Seq(pattern)))
+    override val format: Option[(String, Seq[Any])] = Some(("format.date", Seq(pattern)))
 
     def bind(key: String, data: Map[String, String]) = {
       dateFormatter.bind(key, data).map(d => java.sql.Date.valueOf(d))
@@ -271,7 +270,7 @@ object Formats {
       private val formatter                    = java.time.format.DateTimeFormatter.ofPattern(pattern).withZone(timeZone.toZoneId)
       private def timestampParse(data: String) = java.sql.Timestamp.valueOf(LocalDateTime.parse(data, formatter))
 
-      override val format = Some(("format.timestamp", Seq(pattern)))
+      override val format: Option[(String, Seq[Any])] = Some(("format.timestamp", Seq(pattern)))
 
       override def bind(key: String, data: Map[String, String]): Either[Seq[FormError], Timestamp] =
         parsing(timestampParse, "error.timestamp", Nil)(key, data)
@@ -295,7 +294,7 @@ object Formats {
     val formatter                    = java.time.format.DateTimeFormatter.ofPattern(pattern)
     def localDateParse(data: String) = LocalDate.parse(data, formatter)
 
-    override val format = Some(("format.date", Seq(pattern)))
+    override val format: Option[(String, Seq[Any])] = Some(("format.date", Seq(pattern)))
 
     def bind(key: String, data: Map[String, String]) = parsing(localDateParse, "error.date", Nil)(key, data)
 
@@ -322,7 +321,7 @@ object Formats {
     val formatter                        = java.time.format.DateTimeFormatter.ofPattern(pattern).withZone(zoneId)
     def localDateTimeParse(data: String) = LocalDateTime.parse(data, formatter)
 
-    override val format = Some(("format.localDateTime", Seq(pattern)))
+    override val format: Option[(String, Seq[Any])] = Some(("format.localDateTime", Seq(pattern)))
 
     def bind(key: String, data: Map[String, String]) =
       parsing(localDateTimeParse, "error.localDateTime", Nil)(key, data)
@@ -346,7 +345,7 @@ object Formats {
     val formatter                    = java.time.format.DateTimeFormatter.ofPattern(pattern)
     def localTimeParse(data: String) = LocalTime.parse(data, formatter)
 
-    override val format = Some(("format.localTime", Seq(pattern)))
+    override val format: Option[(String, Seq[Any])] = Some(("format.localTime", Seq(pattern)))
 
     def bind(key: String, data: Map[String, String]) = parsing(localTimeParse, "error.localTime", Nil)(key, data)
 
@@ -362,7 +361,7 @@ object Formats {
    * Default formatter for the `java.util.UUID` type.
    */
   implicit def uuidFormat: Formatter[UUID] = new Formatter[UUID] {
-    override val format = Some(("format.uuid", Nil))
+    override val format: Option[(String, Seq[Any])] = Some(("format.uuid", Nil))
 
     override def bind(key: String, data: Map[String, String]) = parsing(UUID.fromString, "error.uuid", Nil)(key, data)
 

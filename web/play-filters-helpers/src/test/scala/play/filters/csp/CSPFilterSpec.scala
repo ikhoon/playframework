@@ -4,16 +4,19 @@
 
 package play.filters.csp
 
+import javax.inject.Inject
+
+import scala.reflect.ClassTag
+
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigRenderOptions
-import javax.inject.Inject
 import play.api.http.HttpFilters
 import play.api.inject.bind
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.mvc.Handler.Stage
-import play.api.mvc.Results._
 import play.api.mvc._
 import play.api.mvc.request.RequestAttrKey
+import play.api.mvc.Handler.Stage
+import play.api.mvc.Results._
 import play.api.routing.HandlerDef
 import play.api.routing.Router
 import play.api.test._
@@ -21,10 +24,8 @@ import play.api.Application
 import play.api.Configuration
 import play.api.Environment
 
-import scala.reflect.ClassTag
-
 class Filters @Inject() (cspFilter: CSPFilter) extends HttpFilters {
-  def filters = Seq(cspFilter)
+  def filters: Seq[EssentialFilter] = Seq(cspFilter)
 }
 
 class CSPFilterSpec extends PlaySpecification {
@@ -144,6 +145,59 @@ class CSPFilterSpec extends PlaySpecification {
                       "/foo",
                       "comments",
                       Seq("api")
+                    )
+                  ),
+                  Action { request =>
+                    request.body.asFormUrlEncoded
+                      .flatMap(_.get("foo"))
+                      .flatMap(_.headOption)
+                      .map(Results.Ok(_))
+                      .getOrElse(Results.NotFound)
+                  }
+                )
+              }
+            }
+        }
+      ) { app =>
+        val result = route(app, FakeRequest("POST", "/foo")).get
+
+        header(CONTENT_SECURITY_POLICY, result) must beSome
+      }
+    }
+
+    "do not bypass CSP Filter when both route modifier black and white list are empty" in {
+      withApplicationRouter(
+        Ok("hello"),
+        ConfigFactory
+          .parseString(
+            defaultHocon +
+              """
+                |play.filters.csp.routeModifiers.whiteList = []
+                |play.filters.csp.routeModifiers.blackList = []
+                |""".stripMargin
+          )
+          .withFallback(defaultConfig)
+          .root()
+          .render(ConfigRenderOptions.concise()),
+        implicit app => {
+          case _ =>
+            val env    = inject[Environment]
+            val Action = inject[DefaultActionBuilder]
+            new Stage {
+              override def apply(requestHeader: RequestHeader): (RequestHeader, Handler) = {
+                (
+                  requestHeader.addAttr(
+                    Router.Attrs.HandlerDef,
+                    HandlerDef(
+                      env.classLoader,
+                      "routes",
+                      "FooController",
+                      "foo",
+                      Seq.empty,
+                      "POST",
+                      "/foo",
+                      "comments",
+                      Seq()
                     )
                   ),
                   Action { request =>

@@ -142,9 +142,9 @@ Scala
 
 A CSP nonce is a "one time only" value (n=once) that is generated on every request and can be inserted into the body of inline content to whitelist content.
 
-Play defines a nonce through [`play.filters.csp.DefaultCSPProcessor`](api/scala/play/filters/csp/DefaultCSPProcessor.html) if `play.filters.csp.nonce.enabled` is true.  If a request has the attribute [`play.api.mvc.request.RequestAttrKey.CSPNonce`](api/scala/play/api/mvc/request/RequestAttrKey$.html), then that nonce is used.  Otherwise, a nonce is generated from 16 bytes of [`java.security.SecureRandom`](https://docs.oracle.com/javase/8/docs/api/java/security/SecureRandom.html).
+Play defines a nonce through [`play.filters.csp.DefaultCSPProcessor`](api/scala/play/filters/csp/DefaultCSPProcessor.html) if `play.filters.csp.nonce.enabled` is true.  If a request has the attribute [`play.api.mvc.request.RequestAttrKey.CSPNonce`](api/scala/play/api/mvc/request/RequestAttrKey$.html), then that nonce is used.  Otherwise, a nonce is generated from 16 bytes of [`java.security.SecureRandom`](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/security/SecureRandom.html).
 
-@[csp-nonce](/confs/filters-helpers/reference.conf)
+@[csp-nonce](/confs/play-filters-helpers/reference.conf)
 
 Accessing the CSP nonce from a Twirl template is shown in [[Using CSP in Page Templates|CspFilter#Using-CSP-in-Page-Templates]].
 
@@ -178,7 +178,7 @@ The [CSP cheat sheet](https://scotthelme.co.uk/csp-cheat-sheet/) is a good refer
 
 The default policy defined in `CSPFilter` is based off Google's [Strict CSP Policy](https://csp.withgoogle.com/docs/strict-csp.html):
 
-@[csp-directives](/confs/filters-helpers/reference.conf)
+@[csp-directives](/confs/play-filters-helpers/reference.conf)
 
 > **Note:** Google's Strict CSP policy is a good place to start, but it does not completely define a content security policy.  Please consult with a security team to determine the right policy for your site.  
 
@@ -237,7 +237,7 @@ And is used in pages like this:
 ```twirl
 @()(implicit request: RequestHeader)
 
-@views.html.helper.style('type -> "text/css") {
+@views.html.helper.style(Symbol("type") -> "text/css") {
     html, body, pre {
         margin: 0;
         padding: 0;
@@ -260,7 +260,7 @@ and is used as follows:
 ```twirl
 @()(implicit request: RequestHeader)
 
-@views.html.helper.script(args = 'type -> "text/javascript") {
+@views.html.helper.script(args = Symbol("type") -> "text/javascript") {
   alert("hello world");
 }
 ```

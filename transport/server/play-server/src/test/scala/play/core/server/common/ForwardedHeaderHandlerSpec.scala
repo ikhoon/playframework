@@ -8,8 +8,8 @@ import java.net.InetAddress
 
 import com.google.common.net.InetAddresses
 import org.specs2.mutable.Specification
-import play.api.mvc.Headers
 import play.api.mvc.request.RemoteConnection
+import play.api.mvc.Headers
 import play.api.Configuration
 import play.api.PlayException
 import play.core.server.common.ForwardedHeaderHandler._
@@ -452,9 +452,12 @@ class ForwardedHeaderHandlerSpec extends Specification {
     }
 
     "partly ignore x-forward header with some empty addresses" in {
-      remoteConnectionToLocalhost(version("x-forwarded"), """
-                                                            |X-Forwarded-For: ,,192.0.2.43
-        """.stripMargin) mustEqual RemoteConnection("192.0.2.43", false, None)
+      remoteConnectionToLocalhost(
+        version("x-forwarded"),
+        """
+          |X-Forwarded-For: ,,192.0.2.43
+        """.stripMargin
+      ) mustEqual RemoteConnection("192.0.2.43", false, None)
     }
 
     "return the first address if all addresses are trusted with RFC 7239" in {

@@ -6,15 +6,16 @@ package scalaguide.binder.models
 
 import scala.Left
 import scala.Right
+
 import play.api.mvc.PathBindable
-import play.Logger
 import play.api.mvc.QueryStringBindable
+import play.Logger
 
 //#declaration
 case class AgeRange(from: Int, to: Int) {}
 //#declaration
 object AgeRange {
-  //#bind
+  // #bind
   implicit def queryStringBindable(implicit intBinder: QueryStringBindable[Int]): QueryStringBindable[AgeRange] =
     new QueryStringBindable[AgeRange] {
       override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, AgeRange]] = {
@@ -32,5 +33,5 @@ object AgeRange {
         intBinder.unbind("from", ageRange.from) + "&" + intBinder.unbind("to", ageRange.to)
       }
     }
-  //#bind
+  // #bind
 }

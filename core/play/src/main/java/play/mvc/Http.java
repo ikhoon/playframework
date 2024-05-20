@@ -4,10 +4,8 @@
 
 package play.mvc;
 
-import akka.stream.Materializer;
-import akka.stream.javadsl.Sink;
-import akka.stream.javadsl.Source;
-import akka.util.ByteString;
+import static play.core.formatters.Multipart.escapeParamWithHTML5Strategy;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.File;
 import java.io.IOException;
@@ -24,6 +22,10 @@ import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.stream.javadsl.Sink;
+import org.apache.pekko.stream.javadsl.Source;
+import org.apache.pekko.util.ByteString;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 import play.api.http.HttpConfiguration;
@@ -277,14 +279,6 @@ public class Http {
      * @param entries The new attributes.
      * @return The new version of this object with the new attributes.
      */
-    RequestHeader addAttrs(TypedEntry<?>... entries);
-
-    /**
-     * Create a new versions of this object with the given attributes attached to it.
-     *
-     * @param entries The new attributes.
-     * @return The new version of this object with the new attributes.
-     */
     RequestHeader addAttrs(List<TypedEntry<?>> entries);
 
     /**
@@ -362,15 +356,15 @@ public class Http {
     /**
      * @param name Name of the cookie to retrieve
      * @return the cookie, if found, otherwise null
-     * @deprecated Deprecated as of 2.8.0. Use {@link #getCookie(String)} instead.
      */
-    @Deprecated
-    Cookie cookie(String name);
+    Optional<Cookie> cookie(String name);
 
     /**
      * @param name Name of the cookie to retrieve
      * @return the cookie, if found
+     * @deprecated Deprecated as of 2.9.0. Use {@link #cookie(String)} instead.
      */
+    @Deprecated
     Optional<Cookie> getCookie(String name);
 
     /**
@@ -395,8 +389,16 @@ public class Http {
      * Retrieve all headers.
      *
      * @return the request headers for this request.
+     * @deprecated Deprecated as of 2.9.0. Renamed to {@link #headers()}.
      */
     Headers getHeaders();
+
+    /**
+     * Retrieve all headers.
+     *
+     * @return the request headers for this request.
+     */
+    Headers headers();
 
     /**
      * Retrieves a single header.
@@ -405,7 +407,7 @@ public class Http {
      * @return the value corresponding to <code>headerName</code>, or empty if it was not present
      */
     default Optional<String> header(String headerName) {
-      return getHeaders().get(headerName);
+      return headers().get(headerName);
     }
 
     /**
@@ -415,7 +417,7 @@ public class Http {
      * @return <code>true</code> if the request did contain the header.
      */
     default boolean hasHeader(String headerName) {
-      return getHeaders().contains(headerName);
+      return headers().contains(headerName);
     }
 
     /** @return true if request has a body, false otherwise. */
@@ -521,9 +523,6 @@ public class Http {
 
     // Override return type
     Request addAttrs(TypedEntry<?> e1, TypedEntry<?> e2, TypedEntry<?> e3);
-
-    // Override return type
-    Request addAttrs(TypedEntry<?>... entries);
 
     // Override return type
     Request addAttrs(List<TypedEntry<?>> entries);
@@ -636,11 +635,9 @@ public class Http {
       if (body == null || body.as(Object.class) == null) {
         // assume null signifies no body; RequestBody is a wrapper for the actual body content
         headers(
-            getHeaders()
-                .removing(HeaderNames.CONTENT_LENGTH)
-                .removing(HeaderNames.TRANSFER_ENCODING));
+            headers().removing(HeaderNames.CONTENT_LENGTH).removing(HeaderNames.TRANSFER_ENCODING));
       } else {
-        if (!getHeaders().get(HeaderNames.TRANSFER_ENCODING).isPresent()) {
+        if (!headers().get(HeaderNames.TRANSFER_ENCODING).isPresent()) {
           final MultipartFormData<?> multipartFormData = body.asMultipartFormData();
           if (multipartFormData != null) {
             header(
@@ -659,7 +656,7 @@ public class Http {
     private long calcMultipartFormDataBodyLength(final MultipartFormData<?> multipartFormData) {
       final String boundaryToContentTypeStart = MultipartFormatter.boundaryToContentType("");
       final String boundary =
-          getHeaders()
+          headers()
               .get(HeaderNames.CONTENT_TYPE)
               .filter(ct -> ct.startsWith(boundaryToContentTypeStart))
               .map(ct -> "\r\n--" + ct.substring(boundaryToContentTypeStart.length()))
@@ -731,9 +728,11 @@ public class Http {
               + "Content-Disposition: "
               + dispositionType
               + "; name=\""
-              + name
+              + escapeParamWithHTML5Strategy(name)
               + "\""
-              + (filename != null ? "; filename=\"" + filename + "\"" : "")
+              + (filename != null
+                  ? "; filename=\"" + escapeParamWithHTML5Strategy(filename) + "\""
+                  : "")
               + "\r\n"
               + (contentType != null ? "Content-Type: " + contentType + "\r\n" : "")
               + "\r\n"
@@ -822,7 +821,7 @@ public class Http {
      *
      * @param data the multipart-form parameters
      * @param temporaryFileCreator the temporary file creator.
-     * @param mat a Akka Streams Materializer
+     * @param mat a Pekko Streams Materializer
      * @return the modified builder
      * @deprecated Deprecated as of 2.7.0. Renamed to {@link #bodyRaw(List,
      *     Files.TemporaryFileCreator, Materializer)}.
@@ -840,7 +839,7 @@ public class Http {
      *
      * @param data the multipart-form parameters
      * @param temporaryFileCreator the temporary file creator.
-     * @param mat a Akka Streams Materializer
+     * @param mat a Pekko Streams Materializer
      * @return the modified builder
      */
     public RequestBuilder bodyRaw(
@@ -885,6 +884,11 @@ public class Http {
             @Override
             public List<FilePart> getFiles() {
               return Collections.unmodifiableList(files);
+            }
+
+            @Override
+            public boolean isEmpty() {
+              return formData.isEmpty() && files.isEmpty();
             }
           };
       return body(
@@ -1077,7 +1081,7 @@ public class Http {
 
     /** @return the host name from the header */
     public String host() {
-      return getHeaders().get(HeaderNames.HOST).orElse(null);
+      return headers().get(HeaderNames.HOST).orElse(null);
     }
 
     /**
@@ -1135,8 +1139,16 @@ public class Http {
       return this;
     }
 
-    /** @return the headers for this request builder */
+    /**
+     * @return the headers for this request builder
+     * @deprecated Deprecated as of 2.9.0. Renamed to {@link #headers()}.
+     */
     public Headers getHeaders() {
+      return headers();
+    }
+
+    /** @return the headers for this request builder */
+    public Headers headers() {
       return req.headers().asJava();
     }
 
@@ -1157,7 +1169,7 @@ public class Http {
      * @return the builder instance
      */
     public RequestBuilder header(String key, List<String> values) {
-      return this.headers(getHeaders().adding(key, values));
+      return this.headers(headers().adding(key, values));
     }
 
     /**
@@ -1166,7 +1178,7 @@ public class Http {
      * @return the builder instance
      */
     public RequestBuilder header(String key, String value) {
-      return this.headers(getHeaders().adding(key, value));
+      return this.headers(headers().adding(key, value));
     }
 
     /** @return the cookies in Java instances */
@@ -1601,6 +1613,8 @@ public class Http {
      * @return the file parts
      */
     public abstract List<FilePart<A>> getFiles();
+
+    public abstract boolean isEmpty();
 
     /**
      * Access a file part.

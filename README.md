@@ -11,7 +11,7 @@
 [![OpenCollective](https://img.shields.io/opencollective/all/playframework?label=financial%20contributors&logo=open-collective)](https://opencollective.com/playframework)
 
 [![Build Status](https://github.com/playframework/playframework/actions/workflows/build-test.yml/badge.svg)](https://github.com/playframework/playframework/actions/workflows/build-test.yml)
-[![Maven](https://img.shields.io/maven-central/v/com.typesafe.play/play_2.13.svg?logo=apache-maven)](https://mvnrepository.com/artifact/com.typesafe.play/play_2.13)
+[![Maven](https://img.shields.io/maven-central/v/org.playframework/play_2.13.svg?logo=apache-maven)](https://mvnrepository.com/artifact/org.playframework/play_2.13)
 [![Repository size](https://img.shields.io/github/repo-size/playframework/playframework.svg?logo=git)](https://github.com/playframework/playframework)
 [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
 [![Mergify Status](https://img.shields.io/endpoint.svg?url=https://api.mergify.com/v1/badges/playframework/playframework&style=flat)](https://mergify.com)
@@ -47,9 +47,9 @@ You can also individually sponsor the project by <a href="https://www.playframew
 <div align="center">
   <a href="https://informaticon.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/49a3d5258c8e8b1daf5481eb9e00b898-informaticon-logo-black.png" width="250"></a>
   <a href="https://cedarlakeventures.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/bec2b526c9ce52c051f9089a10044867-cedar-lake-ventures.png" width="250"></a>
-  <a href="https://iterable.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/61ddb4c3665b621e6672181f97196748-iterable.png" width="250"></a>
+  <a href="https://nulab.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/6152e584aa8625eedca1c4accf8f8b63-nulab_logo_color.png" width="250"></a>
   <a href="https://pronto.net/"><img src="https://www.playframework.com/assets/images/home/sponsors/c77b1d664f10a1c9cb19b97c6d8bd204-pronto-software.png" width="250"></a>
-  <a href="https://civiform.us/"><img src="https://www.playframework.com/assets/images/home/sponsors/cb047b3782866c962c4d6a35b056b809-civiform.png" width="250"></a>
+  <a href="https://sprypoint.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/3fdf14f6369cf9d69f4a2a29ce26c2f8-sprypoint-logo-lrg-transparent.png" width="250"></a>
   <a href="https://theguardian.com/"><img src="https://www.playframework.com/assets/images/home/sponsors/b15eb0f249dbc45089872e268d8ea5ad-the_guardian.png" width="250"></a>
 </div>
 

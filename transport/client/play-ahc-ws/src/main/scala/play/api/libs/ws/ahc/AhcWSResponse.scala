@@ -6,13 +6,13 @@ package play.api.libs.ws.ahc
 
 import java.net.URI
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import play.shaded.ahc.org.asynchttpclient.{ Response => AHCResponse }
+import scala.xml.Elem
+
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import play.api.libs.json.JsValue
 import play.api.libs.ws._
-
-import scala.xml.Elem
+import play.shaded.ahc.org.asynchttpclient.{ Response => AHCResponse }
 
 /**
  * A WS HTTP Response backed by an AsyncHttpClient response.
@@ -72,7 +72,7 @@ case class AhcWSResponse(underlying: StandaloneWSResponse) extends WSResponse wi
    */
   override def bodyAsBytes: ByteString = underlying.bodyAsBytes
 
-  override def bodyAsSource: Source[ByteString, _] = underlying.bodyAsSource
+  override def bodyAsSource: Source[ByteString, ?] = underlying.bodyAsSource
 
   /**
    * Return the current headers of the request being constructed

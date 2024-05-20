@@ -8,16 +8,16 @@ import java.net._
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import play.api.http.HeaderNames
-import play.api.inject._
-import play.api.libs.ws._
-import play.api.mvc.RequestHeader
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.Exception._
 import scala.util.matching.Regex
 import scala.xml.Node
+
+import play.api.http.HeaderNames
+import play.api.inject._
+import play.api.libs.ws._
+import play.api.mvc.RequestHeader
 
 case class OpenIDServer(protocolVersion: String, url: String, delegate: Option[String])
 
@@ -47,7 +47,7 @@ object UserInfo {
     }
 
     private lazy val signedFields =
-      params.get("openid.signed").flatMap { _.headOption.map { _.split(",") } }.getOrElse(Array())
+      params.get("openid.signed").flatMap { _.headOption.map { _.split(",") } }.getOrElse(Array[String]())
 
     def id =
       params.get("openid.claimed_id").flatMap(_.headOption).orElse(params.get("openid.identity").flatMap(_.headOption))
@@ -124,10 +124,10 @@ class WsOpenIdClient @Inject() (ws: WSClient, discovery: Discovery)(implicit ec:
         ) ++ axParameters(axRequired, axOptional) ++ realm.map("openid.realm" -> _).toList
         val separator = if (server.url.contains("?")) "&" else "?"
         server.url + separator + parameters
-          .map({
+          .map {
             case (k, v) =>
               URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
-          })
+          }
           .mkString("&")
       }
   }
@@ -146,7 +146,10 @@ class WsOpenIdClient @Inject() (ws: WSClient, discovery: Discovery)(implicit ec:
   }
 
   private def verifiedId(queryString: Map[String, Seq[String]]): Future[UserInfo] = {
-    (queryString.get("openid.mode").flatMap(_.headOption), queryString.get("openid.claimed_id").flatMap(_.headOption)) match { // The Claimed Identifier. "openid.claimed_id" and "openid.identity" SHALL be either both present or both absent.
+    (
+      queryString.get("openid.mode").flatMap(_.headOption),
+      queryString.get("openid.claimed_id").flatMap(_.headOption)
+    ) match { // The Claimed Identifier. "openid.claimed_id" and "openid.identity" SHALL be either both present or both absent.
       case (Some("id_res"), Some(id)) => {
         // MUST perform discovery on the claimedId to resolve the op_endpoint.
         val server: Future[OpenIDServer] = discovery.discoverServer(id)
@@ -161,9 +164,9 @@ class WsOpenIdClient @Inject() (ws: WSClient, discovery: Discovery)(implicit ec:
    * Perform direct verification (see 11.4.2. Verifying Directly with the OpenID Provider)
    */
   private def directVerification(queryString: Map[String, Seq[String]])(server: OpenIDServer) = {
-    val fields: Map[String, Seq[String]] = (queryString - "openid.mode" + ("openid.mode" -> Seq(
+    val fields: Map[String, Seq[String]] = queryString - "openid.mode" + ("openid.mode" -> Seq(
       "check_authentication"
-    )))
+    ))
     ws.url(server.url)
       .post(fields)
       .map(response => {
@@ -188,9 +191,12 @@ class WsOpenIdClient @Inject() (ws: WSClient, discovery: Discovery)(implicit ec:
         if (axOptional.isEmpty) Nil
         else Seq("openid.ax.if_available" -> axOptional.map(_._1).mkString(","))
 
-      val definitions = (axRequired ++ axOptional).map(attribute => ("openid.ax.type." + attribute._1 -> attribute._2))
+      val definitions = (axRequired ++ axOptional).map(attribute => "openid.ax.type." + attribute._1 -> attribute._2)
 
-      Seq("openid.ns.ax" -> "http://openid.net/srv/ax/1.0", "openid.ax.mode" -> "fetch_request") ++ axRequiredParams ++ axOptionalParams ++ definitions
+      Seq(
+        "openid.ns.ax"   -> "http://openid.net/srv/ax/1.0",
+        "openid.ax.mode" -> "fetch_request"
+      ) ++ axRequiredParams ++ axOptionalParams ++ definitions
     }
   }
 }

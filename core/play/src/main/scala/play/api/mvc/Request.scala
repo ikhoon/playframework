@@ -7,6 +7,9 @@ package play.api.mvc
 import java.util.Locale
 import java.util.Optional
 
+import scala.annotation.implicitNotFound
+import scala.annotation.tailrec
+
 import play.api.i18n.Lang
 import play.api.i18n.Messages
 import play.api.libs.typedmap.TypedEntry
@@ -15,9 +18,6 @@ import play.api.libs.typedmap.TypedMap
 import play.api.mvc.request.RemoteConnection
 import play.api.mvc.request.RequestTarget
 import play.mvc.Http
-
-import scala.annotation.implicitNotFound
-import scala.annotation.tailrec
 
 /**
  * The complete HTTP request.
@@ -48,7 +48,7 @@ trait Request[+A] extends RequestHeader {
         case rb: play.mvc.Http.RequestBody =>
           rb match {
             // In PlayJava, Optional.empty() is used to represent an empty body
-            case _ if rb.as(classOf[Optional[_]]) != null => !rb.as(classOf[Optional[_]]).isPresent
+            case _ if rb.as(classOf[Optional[?]]) != null => !rb.as(classOf[Optional[?]]).isPresent
             case _                                        => isEmptyBody(rb.as(classOf[AnyRef]))
           }
         case AnyContentAsEmpty | null | ()                      => true
@@ -91,14 +91,14 @@ trait Request[+A] extends RequestHeader {
     new RequestImpl[A](connection, method, target, version, headers, newAttrs, body)
   override def addAttr[B](key: TypedKey[B], value: B): Request[A] =
     withAttrs(attrs.updated(key, value))
-  override def addAttrs(e1: TypedEntry[_]): Request[A]                    = withAttrs(attrs + e1)
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_]): Request[A] = withAttrs(attrs + (e1, e2))
-  override def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_], e3: TypedEntry[_]): Request[A] =
-    withAttrs(attrs + (e1, e2, e3))
-  override def addAttrs(entries: TypedEntry[_]*): Request[A] =
-    withAttrs(attrs.+(entries: _*))
-  override def removeAttr(key: TypedKey[_]): Request[A] =
-    withAttrs(attrs - key)
+  override def addAttrs(e1: TypedEntry[?]): Request[A]                    = withAttrs(attrs.updated(e1))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?]): Request[A] = withAttrs(attrs.updated(e1, e2))
+  override def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?], e3: TypedEntry[?]): Request[A] =
+    withAttrs(attrs.updated(e1, e2, e3))
+  override def addAttrs(entries: TypedEntry[?]*): Request[A] =
+    withAttrs(attrs.updated(entries: _*))
+  override def removeAttr(key: TypedKey[?]): Request[A] =
+    withAttrs(attrs.removed(key))
   override def withTransientLang(lang: Lang): Request[A] =
     addAttr(Messages.Attrs.CurrentLang, lang)
   override def withTransientLang(code: String): Request[A] =
@@ -108,12 +108,22 @@ trait Request[+A] extends RequestHeader {
   override def withoutTransientLang(): Request[A] =
     removeAttr(Messages.Attrs.CurrentLang)
 
-  override def asJava: Http.Request = this match {
-    case req: Request[Http.RequestBody @unchecked] =>
-      // This will preserve the parsed body since it is already using the Java body wrapper
-      new Http.RequestImpl(req)
-    case _ =>
+  /**
+   * Be aware that when converting a Scala request to a Java request that the body
+   * will not be converted automatically to a Java equivalent body. For example:
+   * If the Scala request contains a play.api.mvc.RawBuffer it will not be converted into it's Java equivalent
+   * play.mvc.Http.RawBuffer, or a Scala AnyContentAsEmpty will not be converted into a java.util.Optional.empty()
+   * (which is the Play Java equivalent of an empty body). Therefore helper methods like request.asJava.body().asRaw(),
+   * asJson(), etc. will very likely not work. You can however retrieve any stored body object by using
+   * request.asJava.body().as(classOf[Object]).
+   */
+  override def asJava: Http.Request = this.body match {
+    case null =>
       new Http.RequestImpl(this.withBody(null))
+    case rb: Http.RequestBody => // This will preserve the parsed body since it is already using the Java body wrapper
+      new Http.RequestImpl(this.withBody(rb))
+    case rb =>
+      new Http.RequestImpl(this.withBody(new Http.RequestBody(rb)))
   }
 }
 

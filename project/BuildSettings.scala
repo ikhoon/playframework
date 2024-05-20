@@ -3,28 +3,31 @@
  */
 
 import java.util.regex.Pattern
-import com.typesafe.tools.mima.core.ProblemFilters
+
+import scala.sys.process.stringToProcess
+import scala.util.control.NonFatal
+
+import sbt._
+import sbt.Keys._
+import sbt.ScriptedPlugin.autoImport._
+
 import com.typesafe.tools.mima.core._
+import com.typesafe.tools.mima.core.ProblemFilters
 import com.typesafe.tools.mima.plugin.MimaKeys._
 import com.typesafe.tools.mima.plugin.MimaPlugin
 import de.heikoseeberger.sbtheader.AutomateHeaderPlugin
 import de.heikoseeberger.sbtheader.CommentBlockCreator
 import de.heikoseeberger.sbtheader.CommentStyle
 import de.heikoseeberger.sbtheader.FileType
-import de.heikoseeberger.sbtheader.LineCommentCreator
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport.HeaderPattern.commentBetween
-import interplay._
-import interplay.Omnidoc.autoImport._
-import interplay.PlayBuildBase.autoImport._
-import interplay.ScalaVersions._
-import sbt._
-import sbt.Keys._
-import sbt.ScriptedPlugin.autoImport._
-
-import scala.sys.process.stringToProcess
-import scala.util.control.NonFatal
+import de.heikoseeberger.sbtheader.LineCommentCreator
 import xerial.sbt.Sonatype.autoImport.sonatypeProfileName
+import Omnidoc.autoImport.omnidocPathPrefix
+import Omnidoc.autoImport.omnidocSnapshotBranch
+import PlayBuildBase.autoImport.PlayLibrary
+import PlayBuildBase.autoImport.PlaySbtLibrary
+import PlayBuildBase.autoImport.PlaySbtPlugin
 
 object BuildSettings {
   val snapshotBranch: String = {
@@ -39,7 +42,7 @@ object BuildSettings {
     }
   }
 
-  /** File header settings.  */
+  /** File header settings. */
   private def fileUriRegexFilter(pattern: String): FileFilter = new FileFilter {
     val compiledPattern = Pattern.compile(pattern)
     override def accept(pathname: File): Boolean = {
@@ -77,7 +80,7 @@ object BuildSettings {
 
   private val VersionPattern = """^(\d+).(\d+).(\d+)(-.*)?""".r
 
-  def evictionSettings: Seq[Setting[_]] = Seq(
+  def evictionSettings: Seq[Setting[?]] = Seq(
     // This avoids a lot of dependency resolution warnings to be showed.
     (update / evictionWarningOptions) := EvictionWarningOptions.default
       .withWarnTransitiveEvictions(false)
@@ -88,30 +91,24 @@ object BuildSettings {
   val SourcesApplication = config("sources").hide
 
   /** These settings are used by all projects. */
-  def playCommonSettings: Seq[Setting[_]] = Def.settings(
-    // overwrite Interplay settings to new Sonatype profile
-    sonatypeProfileName := "com.typesafe.play",
+  def playCommonSettings: Seq[Setting[?]] = Def.settings(
+    sonatypeProfileName := "org.playframework",
     fileHeaderSettings,
-    homepage := Some(url("https://playframework.com")),
     ivyLoggingLevel := UpdateLogging.DownloadOnly,
     resolvers ++= Resolver.sonatypeOssRepos("releases"), // sync ScriptedTools.scala
-    resolvers ++= Seq(
-      Resolver.typesafeRepo("releases"),
-      Resolver.typesafeIvyRepo("releases"),
-      Resolver.sbtPluginRepo("releases"), // weird sbt-pgp/play docs/vegemite issue
-    ),
     evictionSettings,
     ivyConfigurations ++= Seq(DocsApplication, SourcesApplication),
     javacOptions ++= Seq("-encoding", "UTF-8", "-Xlint:unchecked", "-Xlint:deprecation"),
+    scalacOptions ++= Seq("-release:17"),
     (Compile / doc / scalacOptions) := {
       // disable the new scaladoc feature for scala 2.12+ (https://github.com/scala/scala-dev/issues/249 and https://github.com/scala/bug/issues/11340)
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, v)) if v >= 12 => Seq("-no-java-comments")
-        case _                       => Seq()
+        case _                       => Seq() // Not available/needed in Scala 3 according to https://github.com/lampepfl/dotty/issues/11907
       }
     },
-    (Test / fork) := true,
-    (Test / parallelExecution) := false,
+    (Test / fork)                 := true,
+    (Test / parallelExecution)    := false,
     (Test / test / testListeners) := Nil,
     (Test / javaOptions) ++= Seq("-XX:MaxMetaspaceSize=384m", "-Xmx512m", "-Xms128m"),
     testOptions ++= Seq(
@@ -120,8 +117,8 @@ object BuildSettings {
     ),
     version ~= { v =>
       v +
-        sys.props.get("akka.version").map("-akka-" + _).getOrElse("") +
-        sys.props.get("akka.http.version").map("-akka-http-" + _).getOrElse("")
+        sys.props.get("pekko.version").map("-pekko-" + _).getOrElse("") +
+        sys.props.get("pekko.http.version").map("-pekko-http-" + _).getOrElse("")
     },
     apiURL := {
       val v = version.value
@@ -185,8 +182,8 @@ object BuildSettings {
           case re @ IvyRegex(apiOrganization, apiName, jarBaseFile) if jarBaseFile.startsWith(s"$apiName-") =>
             val apiVersion = jarBaseFile.substring(apiName.length + 1, jarBaseFile.length)
             apiOrganization match {
-              case "com.typesafe.akka" =>
-                Some(url(raw"https://doc.akka.io/api/akka/$apiVersion/"))
+              case "org.apache.pekko" =>
+                Some(url(raw"https://pekko.apache.org/api/pekko/$apiVersion/"))
 
               case default =>
                 val link = Docs.artifactToJavadoc(apiOrganization, apiName, apiVersion, jarBaseFile)
@@ -197,166 +194,130 @@ object BuildSettings {
             None
         }
         url <- urlOption
-      } yield (fullyFile -> url))(collection.breakOut(Map.canBuildFrom))
+      } yield fullyFile -> url)(collection.breakOut(Map.canBuildFrom))
     }
   )
 
   // Versions of previous minor releases being checked for binary compatibility
-  val mimaPreviousVersion: Option[String] = Some("2.8.0")
+  val mimaPreviousVersion: Option[String] = Some("3.0.0")
 
   /**
    * These settings are used by all projects that are part of the runtime, as opposed to the development mode of Play.
    */
-  def playRuntimeSettings: Seq[Setting[_]] = Def.settings(
+  def playRuntimeSettings: Seq[Setting[?]] = Def.settings(
     playCommonSettings,
     mimaPreviousArtifacts := mimaPreviousVersion.map { version =>
       val cross = if (crossPaths.value) CrossVersion.binary else CrossVersion.disabled
       (organization.value %% moduleName.value % version).cross(cross)
     }.toSet,
     mimaBinaryIssueFilters ++= Seq(
-      // Refactor constructor to use StandaloneAhcWSClient
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.libs.ws.ahc.AhcWSClientProvider.this"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.libs.ws.ahc.AhcWSModule#AhcWSClientProvider.this"),
-      //Remove deprecated methods from Http
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.mvc.Http#RequestImpl.this"),
-      // Remove deprecated methods from HttpRequestHandler
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.DefaultHttpRequestHandler.filterHandler"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.DefaultHttpRequestHandler.this"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.JavaCompatibleHttpRequestHandler.this"),
-      // Refactor params of runEvolutions (ApplicationEvolutions however is private anyway)
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.db.evolutions.ApplicationEvolutions.runEvolutions"),
-      // Removed @varargs (which removed the array forwarder method)
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.libs.typedmap.DefaultTypedMap.-"),
-      // Add .addAttrs(...) varargs and override methods to Request/RequestHeader and TypedMap's
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.mvc.Http#Request.addAttrs"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.mvc.Http#RequestHeader.addAttrs"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.libs.typedmap.TypedMap.+"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.libs.typedmap.TypedMap.-"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.libs.typedmap.DefaultTypedMap.-"),
-      // Remove outdated (internal) method
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.libs.streams.Execution.defaultExecutionContext"),
-      // Add allowEmptyFiles config to allow empty file uploads
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.ParserConfiguration.apply"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.ParserConfiguration.copy"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.ParserConfiguration.this"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.http.ParserConfiguration.curried"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.http.ParserConfiguration.tupled"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.http.ParserConfiguration.unapply"),
-      ProblemFilters.exclude[MissingTypesProblem]("play.api.http.ParserConfiguration$"),
-      // Add withExtraServerConfiguration() to append server config to endpoints
-      ProblemFilters
-        .exclude[ReversedMissingMethodProblem]("play.api.test.ServerEndpointRecipe.withExtraServerConfiguration"),
-      // Support custom name of play_evolutions(_lock) table via metaTable config
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.apply"),
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.copy"),
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.this"),
+      // Upgrade spring and hibernate-validator dependencies, switches to jakarta.validation namespace
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.DynamicForm.this"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.Form.this"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.FormFactory.this"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.Constraints#PlayConstraintValidator.reportValidationStatus"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.Constraints#PlayConstraintValidatorWithPayload.isValid"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.validation.Constraints#ValidateValidator.isValid"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.Constraints#ValidateValidatorWithPayload.isValid"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.validation.Constraints#Validator.isValid"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.Constraints#ValidatorWithPayload.isValid"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.validation.Constraints.displayableConstraint"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.DefaultConstraintValidatorFactory.releaseInstance"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.MappedConstraintValidatorFactory.addConstraintValidator"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "play.data.validation.MappedConstraintValidatorFactory.releaseInstance"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.validation.ValidatorFactoryProvider.this"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.data.validation.ValidatorProvider.this"),
       ProblemFilters.exclude[IncompatibleResultTypeProblem](
-        "play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.copy$default$3"
+        "play.data.validation.DefaultConstraintValidatorFactory.getInstance"
       ),
-      ProblemFilters
-        .exclude[IncompatibleSignatureProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.curried"),
-      ProblemFilters
-        .exclude[IncompatibleSignatureProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.tupled"),
-      ProblemFilters
-        .exclude[IncompatibleSignatureProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig.unapply"),
-      ProblemFilters.exclude[MissingTypesProblem]("play.api.db.evolutions.DefaultEvolutionsDatasourceConfig$"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.DefaultEvolutionsApi.applyFor"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.EvolutionsApi.applyFor"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsApi.evolve"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsApi.resetScripts"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsApi.resolve"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsApi.scripts"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.Evolutions.applyEvolutions"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.Evolutions.cleanupEvolutions"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.Evolutions.withEvolutions"),
-      ProblemFilters
-        .exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsDatasourceConfig.metaTable"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.OfflineEvolutions.applyScript"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.db.evolutions.OfflineEvolutions.resolve"),
-      // Add Result attributes
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.Result.apply"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.Result.copy"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.Result.this"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.mvc.Result.unapply"),
-      // Config which sets Caffeine's internal executor, also switched to trampoline where useful
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.cache.caffeine.CacheManagerProvider.this"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.cache.caffeine.CaffeineCacheApi.this"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.cache.caffeine.CaffeineCacheManager.this"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.cache.caffeine.CaffeineParser.from"),
-      // Remove deprecated FakeKeyStore
-      ProblemFilters.exclude[MissingClassProblem]("play.core.server.ssl.FakeKeyStore$"),
-      ProblemFilters.exclude[MissingClassProblem]("play.core.server.ssl.FakeKeyStore"),
-      // Limit JSON parsing resources
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.data.FormUtils.fromJson$default$1"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.data.FormUtils.fromJson"), // is private
-      // Honour maxMemoryBuffer when binding Json to form
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.data.Form.bindFromRequest"),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem](
+        "play.data.validation.MappedConstraintValidatorFactory.getInstance"
+      ),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem]("play.data.validation.ValidatorFactoryProvider.get"),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem]("play.data.validation.ValidatorProvider.get"),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem](
+        "play.data.validation.ValidatorsComponents.constraintValidatorFactory"
+      ),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem]("play.data.validation.ValidatorsComponents.validator"),
+      ProblemFilters.exclude[IncompatibleResultTypeProblem](
+        "play.data.validation.ValidatorsComponents.validatorFactory"
+      ),
+      ProblemFilters.exclude[InheritedNewAbstractMethodProblem](
+        "play.data.validation.Constraints#PlayConstraintValidator.isValid"
+      ),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$EmailValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$MaxLengthValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$MaxValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$MinLengthValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$MinValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$PatternValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$PlayConstraintValidator"),
+      ProblemFilters.exclude[MissingTypesProblem](
+        "play.data.validation.Constraints$PlayConstraintValidatorWithPayload"
+      ),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$RequiredValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$ValidatePayloadWithValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$ValidateValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$ValidateValidatorWithPayload"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.Constraints$ValidateWithValidator"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.DefaultConstraintValidatorFactory"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.data.validation.MappedConstraintValidatorFactory"),
       ProblemFilters.exclude[ReversedMissingMethodProblem](
-        "play.api.mvc.PlayBodyParsers.play$api$mvc$PlayBodyParsers$_setter_$defaultFormBinding_="
+        "play.data.validation.Constraints#PlayConstraintValidatorWithPayload.isValid"
       ),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.mvc.PlayBodyParsers.defaultFormBinding"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.mvc.PlayBodyParsers.formBinding$default$1"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.mvc.PlayBodyParsers.formBinding"),
-      // fix types on Json parsing limits
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.api.data.Form.bind"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.data.Form.bindFromRequest"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem](
-        "play.api.mvc.BaseControllerHelpers.play$api$mvc$BaseControllerHelpers$_setter_$defaultFormBinding_="
-      ),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.mvc.BaseControllerHelpers.defaultFormBinding"),
-      // Add UUID PathBindableExtractors
-      ProblemFilters.exclude[ReversedMissingMethodProblem](
-        "play.api.routing.sird.PathBindableExtractors.play$api$routing$sird$PathBindableExtractors$_setter_$uuid_="
-      ),
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.routing.sird.PathBindableExtractors.uuid"),
-      // Upgrading JJWT
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.JWTConfigurationParser.apply"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.SecretConfiguration.SHORTEST_SECRET_LENGTH"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.http.SecretConfiguration.SHORT_SECRET_LENGTH"),
-      // Removing Jetty ALPN Agent
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.core.PlayVersion.jettyAlpnAgentVersion"),
-      // Remove obsolete CertificateGenerator
-      ProblemFilters.exclude[MissingClassProblem]("play.core.server.ssl.CertificateGenerator"),
-      ProblemFilters.exclude[MissingClassProblem]("play.core.server.ssl.CertificateGenerator$"),
-      // Add SameSite to DiscardingCookie
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.DiscardingCookie.apply"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.DiscardingCookie.copy"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.DiscardingCookie.this"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.mvc.DiscardingCookie.curried"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.mvc.DiscardingCookie.tupled"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("play.api.mvc.DiscardingCookie.unapply"),
-      ProblemFilters.exclude[MissingTypesProblem]("play.api.mvc.DiscardingCookie$"),
-      // Variable substitution in evolutions scripts
-      ProblemFilters
-        .exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsDatasourceConfig.substitutionsSuffix"),
-      ProblemFilters
-        .exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsDatasourceConfig.substitutionsPrefix"),
-      ProblemFilters.exclude[ReversedMissingMethodProblem](
-        "play.api.db.evolutions.EvolutionsDatasourceConfig.substitutionsMappings"
-      ),
-      ProblemFilters
-        .exclude[ReversedMissingMethodProblem]("play.api.db.evolutions.EvolutionsDatasourceConfig.substitutionsEscape"),
-      // Remove routeAndCall(...) methods that depended on StaticRoutesGenerator
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.test.Helpers.routeAndCall"),
-      // Remove CrossScala (parent class of play.libs.Scala)
-      ProblemFilters.exclude[MissingTypesProblem]("play.libs.Scala"),
-      // Renaming clearLang to withoutLang
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("play.api.i18n.MessagesApi.withoutLang"),
-      // Support for Websockets ping/pong
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.core.server.common.WebSocketFlowHandler#RawMessage.copy"),
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.core.server.common.WebSocketFlowHandler#RawMessage.this"),
-      ProblemFilters.exclude[MissingTypesProblem]("play.core.server.common.WebSocketFlowHandler$RawMessage$"),
-      ProblemFilters
-        .exclude[DirectMissingMethodProblem]("play.core.server.common.WebSocketFlowHandler#RawMessage.apply"),
-      // Add FilePart.transformRefToBytes() method
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.MultipartFormData#FilePart.this"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.MultipartFormData#FilePart.apply"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("play.api.mvc.MultipartFormData#FilePart.copy"),
+      // Inject (CSRF)errorHandler in CSRFCheck
+      ProblemFilters.exclude[DirectMissingMethodProblem]("play.filters.csrf.CSRFCheck.apply"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("play.filters.csrf.CSRFCheck.copy"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("play.filters.csrf.CSRFCheck.this"),
+      ProblemFilters.exclude[MissingTypesProblem]("play.filters.csrf.CSRFCheck$"),
+      // Upgrade to Twirl 2.0.5:
+      // It's not necessary to mixin the Template[0-22] trait(s) into a Twirl template anymore when using Scala 3.
+      // In Scala 2 this is just done to raise a meaningful exception when more than 22 arguments were passed to the template (which Scala 2 does not support).
+      // Since Scala 3 does support more than 22 args, we can just remove the trait(s) from the generated Twirl Scala code.
+      // See https://github.com/playframework/twirl/pull/747
+      // Again, this binary incompatibility only affects Scala 3 artifacts, but in real life, this should have no effect anyway
+      // because either Twirl templates will be regenerated or the missing trait should not affect on how the template is called anyway.
+      // For the record, the error message MiMa came up with was:
+      // "the type hierarchy of object views.html.[defaultpages|helper].<page> is different in current version. Missing types {play.twirl.api.Template[1-4]}"
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.badRequest$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.devError$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.devNotFound$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.error$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.notFound$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.todo$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.defaultpages.unauthorized$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.checkbox$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.defaultFieldConstructor$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.form$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.input$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputCheckboxGroup$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputDate$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputFile$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputPassword$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputRadioGroup$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.inputText$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.javascriptRouter$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.jsloader$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.requireJs$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.script$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.select$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.style$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.helper.textarea$"),
+      ProblemFilters.exclude[MissingTypesProblem]("views.html.play20.manual$"),
     ),
     (Compile / unmanagedSourceDirectories) += {
       val suffix = CrossVersion.partialVersion(scalaVersion.value) match {
@@ -365,11 +326,14 @@ object BuildSettings {
       }
       (Compile / sourceDirectory).value / s"scala-$suffix"
     },
-    // Argument for setting size of permgen space or meta space for all forked processes
     Docs.apiDocsInclude := true
   )
 
-  /** A project that is shared between the sbt runtime and the Play runtime. */
+  /**
+   * A project that is shared between the sbt runtime and the Play runtime.
+   * Such a shared project needs to be a pure Java project, not containing Scala files.
+   * That's because sbt 1.x plugins still build with Scala 2.12, but Play libs don't
+   */
   def PlayNonCrossBuiltProject(name: String, dir: String): Project = {
     Project(name, file(dir))
       .enablePlugins(PlaySbtLibrary, AutomateHeaderPlugin, MimaPlugin)
@@ -377,8 +341,11 @@ object BuildSettings {
       .settings(omnidocSettings: _*)
       .settings(
         autoScalaLibrary := false,
-        crossPaths := false,
-        crossScalaVersions := Seq("2.13.10")
+        crossPaths       := false,
+        // The (cross)ScalaVersion version here doesn't actually matter because these projects don't contain
+        // Scala files anyway and also are published as Java only artifacts (no _2.1x/_3 suffix)
+        // The reason to set crossScalaVersions is so the project gets published when running "+..." (e.g. "+publish[Local]")
+        crossScalaVersions := Seq(scalaVersion.value)
       )
   }
 
@@ -395,28 +362,25 @@ object BuildSettings {
   /** A project that is in the Play runtime. */
   def PlayCrossBuiltProject(name: String, dir: String): Project = {
     Project(name, file(dir))
-      .enablePlugins(PlayLibrary, AutomateHeaderPlugin, AkkaSnapshotRepositories, MimaPlugin)
+      .enablePlugins(PlayLibrary, AutomateHeaderPlugin, PekkoSnapshotRepositories, MimaPlugin)
       .settings(playRuntimeSettings: _*)
       .settings(omnidocSettings: _*)
-      .settings(
-        scalacOptions += "-release:11"
-      )
   }
 
-  def omnidocSettings: Seq[Setting[_]] = Def.settings(
+  def omnidocSettings: Seq[Setting[?]] = Def.settings(
     Omnidoc.projectSettings,
     omnidocSnapshotBranch := snapshotBranch,
-    omnidocPathPrefix := ""
+    omnidocPathPrefix     := ""
   )
 
-  def playScriptedSettings: Seq[Setting[_]] = Seq(
+  def playScriptedSettings: Seq[Setting[?]] = Seq(
     // Don't automatically publish anything.
     // The test-sbt-plugins-* scripts publish before running the scripted tests.
     // When developing the sbt plugins:
     // * run a publishLocal in the root project to get everything
     // * run a publishLocal in the changes projects for fast feedback loops
     scriptedDependencies := (()), // drop Test/compile & publishLocal
-    scriptedBufferLog := false,
+    scriptedBufferLog    := false,
     scriptedLaunchOpts ++= Seq(
       s"-Dsbt.boot.directory=${file(sys.props("user.home")) / ".sbt" / "boot"}",
       "-Xmx512m",
@@ -429,7 +393,7 @@ object BuildSettings {
 
   def disablePublishing = Def.settings(
     (publish / skip) := true,
-    publishLocal := {},
+    publishLocal     := {},
   )
 
   /** A project that runs in the sbt runtime. */
@@ -449,7 +413,7 @@ object BuildSettings {
       .settings(
         playCommonSettings,
         playScriptedSettings,
-        (Test / fork) := false,
+        (Test / fork)         := false,
         mimaPreviousArtifacts := Set.empty,
       )
   }

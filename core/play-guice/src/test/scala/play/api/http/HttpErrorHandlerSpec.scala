@@ -5,11 +5,18 @@
 package play.api.http
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
+import scala.concurrent.duration.Duration
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
+
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
 import org.specs2.mutable.Specification
 import play.api.http.HttpConfiguration.FileMimeTypesConfigurationProvider
 import play.api.i18n._
@@ -30,12 +37,6 @@ import play.core.test.Fakes
 import play.http
 import play.i18n.Langs
 import play.i18n.MessagesApi
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
-import scala.util.control.NoStackTrace
 
 class HttpErrorHandlerSpec extends Specification {
   import HttpErrorHandlerSpec._
@@ -112,10 +113,10 @@ class HttpErrorHandlerSpec extends Specification {
 
         if (isProdMode) {
           id.get must beAnInstanceOf[JsString]
-          requestId.toOption must beEmpty
-          exceptionTitle.toOption must beEmpty
-          exceptionDescription.toOption must beEmpty
-          exceptionCause.toOption must beEmpty
+          requestId.toOption must beNone
+          exceptionTitle.toOption must beNone
+          exceptionDescription.toOption must beNone
+          exceptionCause.toOption must beNone
         } else {
           id.get must beAnInstanceOf[JsString]
           requestId.get must beAnInstanceOf[JsNumber]
@@ -221,6 +222,7 @@ class HttpErrorHandlerSpec extends Specification {
     val config            = ConfigFactory.parseMap(properties.asJava).withFallback(ConfigFactory.defaultReference())
     val configuration     = Configuration(config)
     val env               = Environment.simple(mode = mode)
+    val jEnv              = env.asJava
     val httpConfiguration = HttpConfiguration.fromConfiguration(configuration, env)
     val langs             = new play.api.i18n.DefaultLangsProvider(configuration).get
     val messagesApi       = new DefaultMessagesApiProvider(env, configuration, langs, httpConfiguration).get
@@ -238,6 +240,7 @@ class HttpErrorHandlerSpec extends Specification {
             BindingKey(classOf[MessagesApi]).to(jMessagesApi),
             BindingKey(classOf[Langs]).to(jLangs),
             BindingKey(classOf[Environment]).to(env),
+            BindingKey(classOf[play.Environment]).to(jEnv),
             BindingKey(classOf[HttpConfiguration]).to(httpConfiguration),
             BindingKey(classOf[FileMimeTypesConfiguration]).toProvider[FileMimeTypesConfigurationProvider],
             BindingKey(classOf[FileMimeTypes]).toProvider[DefaultFileMimeTypesProvider]
@@ -252,15 +255,15 @@ object HttpErrorHandlerSpec {
 }
 
 class CustomScalaErrorHandler extends HttpErrorHandler {
-  def onClientError(request: RequestHeader, statusCode: Int, message: String) =
+  def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] =
     Future.successful(Results.Ok)
-  def onServerError(request: RequestHeader, exception: Throwable) =
+  def onServerError(request: RequestHeader, exception: Throwable): Future[Result] =
     Future.successful(Results.Ok)
 }
 
 class CustomJavaErrorHandler extends play.http.HttpErrorHandler {
-  def onClientError(req: play.mvc.Http.RequestHeader, status: Int, msg: String) =
+  def onClientError(req: play.mvc.Http.RequestHeader, status: Int, msg: String): CompletionStage[play.mvc.Result] =
     CompletableFuture.completedFuture(play.mvc.Results.ok())
-  def onServerError(req: play.mvc.Http.RequestHeader, exception: Throwable) =
+  def onServerError(req: play.mvc.Http.RequestHeader, exception: Throwable): CompletionStage[play.mvc.Result] =
     CompletableFuture.completedFuture(play.mvc.Results.ok())
 }

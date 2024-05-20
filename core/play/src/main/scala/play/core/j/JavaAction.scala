@@ -5,33 +5,32 @@
 package play.core.j
 
 import java.lang.annotation.Annotation
-import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.AnnotatedElement
 import java.util.concurrent.CompletionStage
 import javax.inject.Inject
+
+import scala.collection.immutable.ArraySeq
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
+import scala.jdk.FutureConverters._
+import scala.language.existentials
 
 import play.api.http.ActionCompositionConfiguration
 import play.api.http.HttpConfiguration
 import play.api.inject.Injector
-import play.api.Logger
-
-import scala.jdk.FutureConverters._
-import scala.language.existentials
-import play.core.Execution.Implicits.trampoline
 import play.api.mvc._
-import play.mvc.FileMimeTypes
-import play.mvc.{ Action => JAction }
-import play.mvc.{ BodyParser => JBodyParser }
-import play.mvc.{ Result => JResult }
+import play.api.Logger
+import play.core.Execution.Implicits.trampoline
 import play.i18n.{ Langs => JLangs }
 import play.i18n.{ MessagesApi => JMessagesApi }
 import play.libs.AnnotationUtils
+import play.mvc.{ Action => JAction }
+import play.mvc.{ BodyParser => JBodyParser }
+import play.mvc.{ Result => JResult }
+import play.mvc.FileMimeTypes
 import play.mvc.Http.{ Request => JRequest }
 import play.mvc.Http.{ RequestImpl => JRequestImpl }
-
-import scala.jdk.CollectionConverters._
-import scala.collection.immutable.ArraySeq
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 
 /**
  * Retains and evaluates what is otherwise expensive reflection work on call by call basis.
@@ -40,11 +39,11 @@ import scala.concurrent.Future
  * @param method     The method to be evaluated
  */
 class JavaActionAnnotations(
-    val controller: Class[_],
+    val controller: Class[?],
     val method: java.lang.reflect.Method,
     config: ActionCompositionConfiguration
 ) {
-  val parser: Class[_ <: JBodyParser[_]] =
+  val parser: Class[? <: JBodyParser[?]] =
     Seq(
       method.getAnnotation(classOf[play.mvc.BodyParser.Of]),
       controller.getAnnotation(classOf[play.mvc.BodyParser.Of])
@@ -54,13 +53,13 @@ class JavaActionAnnotations(
       .getOrElse(classOf[JBodyParser.Default])
 
   val controllerAnnotations: Seq[(Annotation, AnnotatedElement)] = Seq
-    .unfold[Seq[(Annotation, AnnotatedElement)], Option[Class[_]]](Option(controller)) { clazz =>
+    .unfold[Seq[(Annotation, AnnotatedElement)], Option[Class[?]]](Option(controller)) { clazz =>
       clazz.map(c => (c.getDeclaredAnnotations.map((_, c)).toSeq, Option(c.getSuperclass)))
     }
     .reverse
     .flatten
 
-  val actionMixins: Seq[(Annotation, Class[_ <: JAction[_]], AnnotatedElement)] = {
+  val actionMixins: Seq[(Annotation, Class[? <: JAction[?]], AnnotatedElement)] = {
     val methodAnnotations = ArraySeq.unsafeWrapArray(method.getDeclaredAnnotations.map((_, method)))
     val allDeclaredAnnotations: Seq[(java.lang.annotation.Annotation, AnnotatedElement)] =
       if (config.controllerAnnotationsFirst) {
@@ -105,7 +104,7 @@ class JavaActionAnnotations(
 abstract class JavaAction(val handlerComponents: JavaHandlerComponents)
     extends Action[play.mvc.Http.RequestBody]
     with JavaHelpers {
-  private val logger = Logger(classOf[JAction[_]])
+  private val logger = Logger(classOf[JAction[?]])
 
   private def config: ActionCompositionConfiguration = handlerComponents.httpConfiguration.actionComposition
 
@@ -118,7 +117,17 @@ abstract class JavaAction(val handlerComponents: JavaHandlerComponents)
     val javaRequest: JRequest = new JRequestImpl(req)
 
     val rootAction = new JAction[Any] {
-      override def call(request: JRequest): CompletionStage[JResult] = invocation(request)
+      override def call(request: JRequest): CompletionStage[JResult] =
+        // It's totally OK to call parseBody(...) even when body parsing was not deferred because it won't do anything
+        // if body was parsed already and just passes through
+        BodyParser
+          .parseBody(
+            parser,
+            request.asScala(),
+            (r: Request[?]) => invocation(r.asJava).toCompletableFuture.asScala.map(_.asScala())
+          )(executionContext)
+          .map(_.asJava)
+          .asJava
     }
 
     val baseAction = handlerComponents.actionCreator.createAction(javaRequest, annotations.method)
@@ -131,7 +140,7 @@ abstract class JavaAction(val handlerComponents: JavaHandlerComponents)
       baseAction
     }
 
-    val firstUserDeclaredAction = annotations.actionMixins.foldLeft[JAction[_ <: Any]](endOfChainAction) {
+    val firstUserDeclaredAction = annotations.actionMixins.foldLeft[JAction[? <: Any]](endOfChainAction) {
       case (delegate, (annotation, actionClass, annotatedElement)) =>
         val action = handlerComponents.getAction(actionClass).asInstanceOf[play.mvc.Action[Object]]
         action.configuration = annotation
@@ -151,25 +160,24 @@ abstract class JavaAction(val handlerComponents: JavaHandlerComponents)
 
     val trampolineWithContext: ExecutionContext = {
       val javaClassLoader = Thread.currentThread.getContextClassLoader
-      new HttpExecutionContext(javaClassLoader, trampoline)
+      new ClassLoaderExecutionContext(javaClassLoader, trampoline)
     }
     if (logger.isDebugEnabled) {
       val actionChain = Seq
-        .unfold[JAction[_], Option[JAction[_]]](Option(firstAction)) { action =>
+        .unfold[JAction[?], Option[JAction[?]]](Option(firstAction)) { action =>
           action.map(a => (a, Option(a.delegate)))
         }
       logger.debug("### Start of action order")
       actionChain
-        .zip(LazyList.from(1))
-        .foreach({
-          case (action, index) =>
-            logger.debug(
-              s"${index}. ${action.getClass.getName}" +
-                (if (action.annotatedElement != null) {
-                   s" defined on ${action.annotatedElement}"
-                 })
-            )
-        })
+        .lazyZip(LazyList.from(1))
+        .foreach { (action, index) =>
+          logger.debug(
+            s"${index}. ${action.getClass.getName}" +
+              (if (action.annotatedElement != null) {
+                 s" defined on ${action.annotatedElement}"
+               })
+          )
+        }
       logger.debug("### End of action order")
     }
     val actionFuture: Future[Future[JResult]] = Future {
@@ -216,8 +224,8 @@ class DefaultJavaContextComponents @Inject() (
 ) extends JavaContextComponents
 
 trait JavaHandlerComponents {
-  def getBodyParser[A <: JBodyParser[_]](parserClass: Class[A]): A
-  def getAction[A <: JAction[_]](actionClass: Class[A]): A
+  def getBodyParser[A <: JBodyParser[?]](parserClass: Class[A]): A
+  def getAction[A <: JAction[?]](actionClass: Class[A]): A
   def actionCreator: play.http.ActionCreator
   def httpConfiguration: HttpConfiguration
   def executionContext: ExecutionContext
@@ -239,6 +247,6 @@ class DefaultJavaHandlerComponents @Inject() (
     @deprecated("Inject MessagesApi, Langs, FileMimeTypes or HttpConfiguration instead", "2.8.0")
     val contextComponents: JavaContextComponents
 ) extends JavaHandlerComponents {
-  def getBodyParser[A <: JBodyParser[_]](parserClass: Class[A]): A = injector.instanceOf(parserClass)
-  def getAction[A <: JAction[_]](actionClass: Class[A]): A         = injector.instanceOf(actionClass)
+  def getBodyParser[A <: JBodyParser[?]](parserClass: Class[A]): A = injector.instanceOf(parserClass)
+  def getAction[A <: JAction[?]](actionClass: Class[A]): A         = injector.instanceOf(actionClass)
 }

@@ -4,17 +4,18 @@
 
 package play.filters.csp
 
-import akka.stream.Materializer
-import akka.util.ByteString
 import javax.inject.Inject
 import javax.inject.Singleton
-import play.api.Configuration
-import play.api.libs.streams.Accumulator
-import play.api.mvc._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import play.api.libs.streams.Accumulator
+import play.api.mvc._
+import play.api.Configuration
 
 /**
  * This trait is used to give a CSP header to the result for a single action.
@@ -36,8 +37,7 @@ trait CSPActionBuilder extends ActionBuilder[Request, AnyContent] {
   protected def mat: Materializer
 
   override def invokeBlock[A](request: Request[A], block: Request[A] => Future[Result]): Future[Result] = {
-    // Inline with a type witness to avoid the silly erasure warning on r: Request[A]
-    @inline def action[R: ClassTag](request: Request[A], block: Request[A] => Future[Result])(
+    @inline def action[R](request: Request[A], block: Request[A] => Future[Result])(
         implicit ev: R =:= Request[A]
     ) = {
       new EssentialAction {
@@ -65,8 +65,7 @@ object CSPActionBuilder {
    * Creates a new CSPActionBuilder using a Configuration and bodyParsers instance.
    */
   def apply(config: Configuration, bodyParsers: PlayBodyParsers)(
-      implicit
-      materializer: Materializer,
+      implicit materializer: Materializer,
       ec: ExecutionContext
   ): CSPActionBuilder = {
     apply(CSPResultProcessor(CSPProcessor(CSPConfig.fromConfiguration(config))), bodyParsers)
@@ -76,8 +75,7 @@ object CSPActionBuilder {
    * Creates a new CSPActionBuilder using a configured CSPProcessor and bodyParsers instance.
    */
   def apply(processor: CSPResultProcessor, bodyParsers: PlayBodyParsers)(
-      implicit
-      materializer: Materializer,
+      implicit materializer: Materializer,
       ec: ExecutionContext
   ): CSPActionBuilder = {
     new DefaultCSPActionBuilder(processor, bodyParsers)
@@ -99,8 +97,7 @@ class DefaultCSPActionBuilder @Inject() (
     protected override val cspResultProcessor: CSPResultProcessor,
     bodyParsers: PlayBodyParsers
 )(
-    implicit
-    protected override val executionContext: ExecutionContext,
+    implicit protected override val executionContext: ExecutionContext,
     protected override val mat: Materializer
 ) extends CSPActionBuilder {
   override def parser: BodyParser[AnyContent] = bodyParsers.default

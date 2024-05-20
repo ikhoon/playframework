@@ -5,16 +5,17 @@
 package scalaguide.advanced.filters.essential
 import javax.inject.Inject
 
-import akka.NotUsed
-import akka.actor.ActorSystem
-import akka.event.Logging
-import akka.stream.Materializer
-import akka.stream.scaladsl._
-import akka.util.ByteString
-import play.api.mvc._
-import play.api.libs.streams._
-
 import scala.concurrent.ExecutionContext
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.event.Logging
+import org.apache.pekko.event.LoggingAdapter
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.util.ByteString
+import org.apache.pekko.NotUsed
+import play.api.libs.streams._
+import play.api.mvc._
 
 /**
  * Demonstrates the use of an accumulator with flow.
@@ -24,7 +25,7 @@ class AccumulatorFlowFilter @Inject() (actorSystem: ActorSystem)(implicit ec: Ex
     extends EssentialFilter {
   private val logger = org.slf4j.LoggerFactory.getLogger("application.AccumulatorFlowFilter")
 
-  private implicit val logging = Logging(actorSystem.eventStream, logger.getName)
+  private implicit val logging: LoggingAdapter = Logging(actorSystem.eventStream, logger.getName)
 
   override def apply(next: EssentialAction): EssentialAction = new EssentialAction {
     override def apply(request: RequestHeader): Accumulator[ByteString, Result] = {

@@ -4,31 +4,31 @@
 
 package play.data
 
-import com.typesafe.config.ConfigFactory
+import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.TextNode
+import com.fasterxml.jackson.databind.JsonNode
+import com.typesafe.config.ConfigFactory
 import play.api.data.FormJsonExpansionTooLarge
 import play.api.i18n.DefaultMessagesApi
+import play.api.i18n.Messages
 import play.core.j.PlayFormsMagicForJava.javaFieldtoScalaField
 import play.data.format.Formatters
 import play.libs.Files.SingletonTemporaryFileCreator
 import play.mvc.Http.RequestBuilder
-import views.html.helper.FieldConstructor.defaultField
 import views.html.helper.inputText
-
-import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
+import views.html.helper.FieldConstructor.defaultField
 
 /**
  * Specs for Java dynamic forms
  */
 class DynamicFormSpec extends CommonFormSpec {
-  val messagesApi       = new DefaultMessagesApi()
-  implicit val messages = messagesApi.preferred(Seq.empty)
-  val jMessagesApi      = new play.i18n.MessagesApi(messagesApi)
-  val validatorFactory  = FormSpec.validatorFactory()
-  val config            = ConfigFactory.load()
+  val messagesApi                 = new DefaultMessagesApi()
+  implicit val messages: Messages = messagesApi.preferred(Seq.empty)
+  val jMessagesApi                = new play.i18n.MessagesApi(messagesApi)
+  val validatorFactory            = FormSpec.validatorFactory()
+  val config                      = ConfigFactory.load()
 
   "a dynamic form" should {
     "bind values from a request" in {
@@ -132,7 +132,7 @@ class DynamicFormSpec extends CommonFormSpec {
           "document",
           "application/pdf",
           "best_thesis.pdf",
-          "by Lightbend founder Martin Odersky"
+          "by Microsoft founder Bill Gates"
         )
         myForm.field("document").value().toScala must beNone
         myForm.field("document").indexes() must beEqualTo(List.empty.asJava)
@@ -262,9 +262,11 @@ class DynamicFormSpec extends CommonFormSpec {
     }
 
     "fail with exception when the json paylod is bigger than default maxBufferSize" in {
-      val cfg  = ConfigFactory.parseString("""
-                                             |play.http.parser.maxMemoryBuffer = 32
-                                             |""".stripMargin).withFallback(config)
+      val cfg = ConfigFactory
+        .parseString("""
+                       |play.http.parser.maxMemoryBuffer = 32
+                       |""".stripMargin)
+        .withFallback(config)
       val form = new DynamicForm(jMessagesApi, new Formatters(jMessagesApi), validatorFactory, cfg)
       val longString =
         "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"

@@ -14,7 +14,7 @@ import play.dev.filewatch.FileWatchService
 object PlayImport {
   val Production = config("production")
 
-  def component(id: String) = "com.typesafe.play" %% id % play.core.PlayVersion.current
+  def component(id: String) = "org.playframework" %% id % play.core.PlayVersion.current
 
   def movedExternal(msg: String): ModuleID = {
     System.err.println(msg)
@@ -26,7 +26,7 @@ object PlayImport {
 
   val nettyServer = component("play-netty-server")
 
-  val akkaHttpServer = component("play-akka-http-server")
+  val pekkoHttpServer = component("play-pekko-http-server")
 
   val armeriaServer = component("play-armeria-server")
 
@@ -58,7 +58,7 @@ object PlayImport {
 
   val javaJpa = component("play-java-jpa")
 
-  val filters = component("filters-helpers")
+  val filters = component("play-filters-helpers")
 
   // Integration with JSR 107
   val jcache = component("play-jcache")

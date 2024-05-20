@@ -8,8 +8,6 @@ import static play.libs.Scala.asScala;
 import static play.mvc.Http.Request;
 import static play.mvc.Http.RequestBuilder;
 
-import akka.stream.Materializer;
-import akka.util.ByteString;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -17,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.util.ByteString;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.htmlunit.HtmlUnitDriver;
@@ -36,7 +36,6 @@ import play.mvc.Result;
 import play.routing.Router;
 import play.twirl.api.Content;
 import scala.jdk.javaapi.FutureConverters;
-import scala.jdk.javaapi.OptionConverters;
 
 /** Helper functions to run tests. */
 public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames {
@@ -219,7 +218,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
   }
 
   /**
-   * Extracts the content as a {@link akka.util.ByteString}.
+   * Extracts the content as a {@link org.apache.pekko.util.ByteString}.
    *
    * <p>This method is only capable of extracting the content of results with strict entities. To
    * extract the content of results with streamed entities, use {@link
@@ -239,7 +238,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
   }
 
   /**
-   * Extracts the content as a {@link akka.util.ByteString}.
+   * Extracts the content as a {@link org.apache.pekko.util.ByteString}.
    *
    * @param result The result to extract the content from.
    * @param mat The materializer to use to extract the body from the result stream.
@@ -250,7 +249,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
   }
 
   /**
-   * Extracts the content as a {@link akka.util.ByteString}.
+   * Extracts the content as a {@link org.apache.pekko.util.ByteString}.
    *
    * @param result The result to extract the content from.
    * @param mat The materializer to use to extract the body from the result stream.
@@ -455,7 +454,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
 
   /**
    * Creates a new Test server listening on port defined by configuration setting "testserver.port"
-   * (defaults to 19001).
+   * (defaults to a random port).
    *
    * @return the test server.
    */
@@ -465,7 +464,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
 
   /**
    * Creates a new Test server listening on port defined by configuration setting "testserver.port"
-   * (defaults to 19001) and using the given Application.
+   * (defaults to a random port) and using the given Application.
    *
    * @param app the application.
    * @return the test server.
@@ -570,9 +569,7 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
               try {
                 start(server);
                 startedServer = server;
-                browser =
-                    testBrowser(
-                        webDriver, (Integer) OptionConverters.toJava(server.config().port()).get());
+                browser = testBrowser(webDriver, server.getRunningHttpPort().getAsInt());
                 block.accept(browser);
               } finally {
                 if (browser != null) {
@@ -588,6 +585,12 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
 
   /**
    * Creates a Test Browser.
+   *
+   * <p>Be aware: If set, the port the test browser is using is defined by the system property
+   * "testserver.port". Starting with Play 2.9, if this property is not set, the port by default is
+   * 0, which means the operating system will assign a random port. Thus, you should only use this
+   * method here if you did explicitly set the "testserver.port" property, otherwise you should use
+   * the testBrowser(port) method (which takes a port param).
    *
    * @return the test browser.
    */
@@ -607,6 +610,12 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
 
   /**
    * Creates a Test Browser.
+   *
+   * <p>Be aware: If set, the port the test browser is using is defined by the system property
+   * "testserver.port". Starting with Play 2.9, if this property is not set, the port by default is
+   * 0, which means the operating system will assign a random port. Thus, you should only use this
+   * method here if you did explicitly set the "testserver.port" property, otherwise you should use
+   * the testBrowser(webDriver, port) method (which takes a port param).
    *
    * @param webDriver the class of webdriver.
    * @return the test browser.
@@ -645,6 +654,12 @@ public class Helpers implements play.mvc.Http.Status, play.mvc.Http.HeaderNames 
 
   /**
    * Creates a Test Browser.
+   *
+   * <p>Be aware: If set, the port the test browser is using is defined by the system property
+   * "testserver.port". Starting with Play 2.9, if this property is not set, the port by default is
+   * 0, which means the operating system will assign a random port. Thus, you should only use this
+   * method here if you did explicitly set the "testserver.port" property, otherwise you should use
+   * the testBrowser(of, port) method (which takes a port param).
    *
    * @param of the web driver to run the browser with.
    * @return the test browser.

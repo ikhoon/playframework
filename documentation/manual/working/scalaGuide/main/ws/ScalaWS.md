@@ -52,7 +52,7 @@ You end by calling a method corresponding to the HTTP method you want to use.  T
 
 This returns a `Future[WSResponse]` where the [Response](api/scala/play/api/libs/ws/WSResponse.html) contains the data returned from the server.
 
-> If you are doing any blocking work, including any kind of DNS work such as calling [`java.util.URL.equals()`](https://docs.oracle.com/javase/8/docs/api/java/net/URL.html#equals-java.lang.Object-), then you should use a custom execution context as described in [[ThreadPools]], preferably through a [`CustomExecutionContext`](api/scala/play/api/libs/concurrent/CustomExecutionContext.html).  You should size the pool to leave a safety margin large enough to account for failures. 
+> If you are doing any blocking work, including any kind of DNS work such as calling [`java.util.URL.equals()`](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/net/URL.html#equals\(java.lang.Object\)), then you should use a custom execution context as described in [[ThreadPools]], preferably through a [`CustomExecutionContext`](api/scala/play/api/libs/concurrent/CustomExecutionContext.html).  You should size the pool to leave a safety margin large enough to account for failures.
 
 > If you are calling out to an [unreliable network](https://queue.acm.org/detail.cfm?id=2655736), consider using [`Futures.timeout`](api/scala/play/api/libs/concurrent/Futures.html) and a [circuit breaker](https://martinfowler.com/bliki/CircuitBreaker.html) like [Failsafe](https://github.com/jhalterman/failsafe#circuit-breakers).
 
@@ -133,7 +133,7 @@ The easiest way to post XML data is to use XML literals.  XML literals are conve
 
 ### Submitting Streaming data
 
-It's also possible to stream data in the request body using [Akka Streams](https://doc.akka.io/docs/akka/2.6/stream/stream-flows-and-basics.html?language=scala).
+It's also possible to stream data in the request body using [Pekko Streams](https://pekko.apache.org/docs/pekko/1.0/stream/stream-flows-and-basics.html?language=scala).
 
 For example, imagine you have executed a database query that is returning a large image, and you would like to forward that data to a different endpoint for further processing. Ideally, if you can send the data as you receive it from the database, you will reduce latency and also avoid problems resulting from loading in memory a large set of data. If your database access library supports [Reactive Streams](http://www.reactive-streams.org/) (for instance, [Slick](https://scala-slick.org) does), here is an example showing how you could implement the described behavior:
 
@@ -178,11 +178,11 @@ The WSResponse extends [`play.api.libs.ws.WSBodyReadables`](api/scala/play/api/l
 
 ### Processing a response as JSON
 
-You can process the response as a [JSON object](https://static.javadoc.io/com.typesafe.play/play-json_2.13/2.9.2/play/api/libs/json/JsValue.html) by calling `response.json`.
+You can process the response as a [JSON object](https://www.javadoc.io/doc/org.playframework/play-json_2.13/3.0.0/play/api/libs/json/JsValue.html) by calling `response.json`.
 
 @[scalaws-process-json](code/ScalaWSSpec.scala)
 
-The JSON library has a [[useful feature|ScalaJsonCombinators]] that will map an implicit [`Reads[T]`](https://static.javadoc.io/com.typesafe.play/play-json_2.13/2.9.2/play/api/libs/json/Reads.html) directly to a class:
+The JSON library has a [[useful feature|ScalaJsonCombinators]] that will map an implicit [`Reads[T]`](https://www.javadoc.io/doc/org.playframework/play-json_2.13/3.0.0/play/api/libs/json/Reads.html) directly to a class:
 
 @[scalaws-process-json-with-implicit](code/ScalaWSSpec.scala)
 
@@ -196,7 +196,7 @@ You can process the response as an [XML literal](https://www.scala-lang.org/api/
 
 Calling `get()`, `post()` or `execute()` will cause the body of the response to be loaded into memory before the response is made available.  When you are downloading a large, multi-gigabyte file, this may result in unwelcome garbage collection or even out of memory errors.
 
-`WS` lets you consume the response's body incrementally by using an [Akka Streams](https://doc.akka.io/docs/akka/2.6/stream/stream-flows-and-basics.html?language=scala) `Sink`.  The [`stream()`](api/scala/play/api/libs/ws/WSRequest.html#stream\(\):scala.concurrent.Future[StandaloneWSRequest.this.Response]) method on `WSRequest` returns a streaming `WSResponse` which contains a [`bodyAsSource`](api/scala/play/api/libs/ws/WSResponse.html#bodyAsSource:akka.stream.scaladsl.Source[akka.util.ByteString,_]) method that returns a `Source[ByteString, _]`  
+`WS` lets you consume the response's body incrementally by using an [Pekko Streams](https://pekko.apache.org/docs/pekko/1.0/stream/stream-flows-and-basics.html?language=scala) `Sink`.  The [`stream()`](api/scala/play/api/libs/ws/WSRequest.html#stream\(\):scala.concurrent.Future[StandaloneWSRequest.this.Response]) method on `WSRequest` returns a streaming `WSResponse` which contains a [`bodyAsSource`](api/scala/play/api/libs/ws/WSResponse.html#bodyAsSource:org.apache.pekko.stream.scaladsl.Source[org.apache.pekko.util.ByteString,_]) method that returns a `Source[ByteString, _]`  
 
 > **Note**: In 2.5.x, a `StreamedResponse` was returned in response to a `request.stream()` call.  In 2.6.x, a standard [`WSResponse`](api/scala/play/api/libs/ws/WSResponse.html) is returned, and the `bodyAsSource()` method should be used to return the Source.
 
@@ -250,7 +250,7 @@ However, if you choose, you can instantiate a `WSClient` directly from code and 
 
 > **If you create a WSClient manually then you _must_ call `client.close()` to clean it up when you've finished with it.** Each client creates its own thread pool. If you fail to close the client or if you create too many clients then you will run out of threads or file handles -— you'll get errors like "Unable to create new native thread" or "too many open files" as the underlying resources are consumed.
 
-You need an instance of an `akka.stream.Materializer` to create a `play.api.libs.ws.ahc.AhcWSClient` instance directly.  Usually you'll inject this into the service using dependency injection:
+You need an instance of an `pekko.stream.Materializer` to create a `play.api.libs.ws.ahc.AhcWSClient` instance directly.  Usually you'll inject this into the service using dependency injection:
 
 @[simple-ws-custom-client](code/ScalaWSSpec.scala)
 
@@ -277,7 +277,7 @@ Ideally, you should close a client after you know all requests have been complet
 If you want to call WS outside of the context of Play altogether, you can use the standalone version of Play WS, which does not depend on any Play libraries.  You can do this by adding `play-ahc-ws-standalone` to your project:
 
 ```scala
-libraryDependencies += "com.typesafe.play" %% "play-ahc-ws-standalone" % playWSStandalone
+libraryDependencies += "org.playframework" %% "play-ahc-ws-standalone" % playWSStandalone
 ```
 
 Please see https://github.com/playframework/play-ws and the [[2.6 migration guide|WSMigration26]] for more information.
@@ -300,7 +300,7 @@ You can create a custom body writable to a request as follows, using an `BodyWri
 
 ## Accessing AsyncHttpClient
 
-You can get access to the underlying [AsyncHttpClient](https://static.javadoc.io/org.asynchttpclient/async-http-client/2.10.0/org/asynchttpclient/AsyncHttpClient.html) from a `WSClient`.
+You can get access to the underlying [AsyncHttpClient](https://www.javadoc.io/doc/org.asynchttpclient/async-http-client/2.12.3/org/asynchttpclient/AsyncHttpClient.html) from a `WSClient`.
 
 @[underlying](code/ScalaWSSpec.scala)
 
@@ -335,7 +335,7 @@ The request timeout can be overridden for a specific connection with `withReques
 
 The following advanced settings can be configured on the underlying AsyncHttpClientConfig.
 
-Please refer to the [AsyncHttpClientConfig Documentation](https://static.javadoc.io/org.asynchttpclient/async-http-client/2.10.0/org/asynchttpclient/DefaultAsyncHttpClientConfig.Builder.html) for more information.
+Please refer to the [AsyncHttpClientConfig Documentation](https://www.javadoc.io/doc/org.asynchttpclient/async-http-client/2.12.3/org/asynchttpclient/DefaultAsyncHttpClientConfig.Builder.html) for more information.
 
 * `play.ws.ahc.keepAlive`
 * `play.ws.ahc.maxConnectionsPerHost`

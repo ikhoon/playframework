@@ -4,13 +4,15 @@
 
 package javaguide.tests;
 
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import java.sql.Connection;
 import java.sql.SQLException;
 import org.junit.*;
+import play.Environment;
+import play.api.db.evolutions.EnvironmentEvolutionsReader;
 import play.db.Database;
 import play.db.Databases;
 import play.db.evolutions.*;
@@ -67,7 +69,7 @@ public class JavaTestingWithDatabases {
     // #in-memory
 
     try {
-      assertThat(database.getConnection().getMetaData().getDatabaseProductName(), equalTo("H2"));
+      assertThat(database.getConnection().getMetaData().getDatabaseProductName()).isEqualTo("H2");
     } finally {
       database.shutdown();
     }
@@ -82,7 +84,7 @@ public class JavaTestingWithDatabases {
     // #in-memory-full-config
 
     try {
-      assertThat(database.getConnection().getMetaData().getDatabaseProductName(), equalTo("H2"));
+      assertThat(database.getConnection().getMetaData().getDatabaseProductName()).isEqualTo("H2");
     } finally {
       // #in-memory-shutdown
       database.shutdown();
@@ -146,6 +148,29 @@ public class JavaTestingWithDatabases {
       Evolutions.applyEvolutions(
           database, Evolutions.fromClassLoader(getClass().getClassLoader(), "testdatabase/"));
       // #apply-evolutions-custom-path
+    } finally {
+      database.shutdown();
+    }
+  }
+
+  @Test
+  public void absoluteRelativePathEvolutions() throws Exception {
+    Database database = Databases.inMemory();
+    try {
+      // #apply-evolutions-absolute-relative-path
+      // ###insert: import play.Environment;
+      // ###insert: import play.api.db.evolutions.EnvironmentEvolutionsReader;
+
+      // Absolute path
+      Evolutions.applyEvolutions(
+          database,
+          new EnvironmentEvolutionsReader(Environment.simple().asScala(), "/opt/db_migration"));
+
+      // Relative path (based on your project's root folder)
+      Evolutions.applyEvolutions(
+          database,
+          new EnvironmentEvolutionsReader(Environment.simple().asScala(), "../db_migration"));
+      // #apply-evolutions-absolute-relative-path
     } finally {
       database.shutdown();
     }

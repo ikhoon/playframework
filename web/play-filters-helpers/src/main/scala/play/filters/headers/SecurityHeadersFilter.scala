@@ -7,10 +7,11 @@ package play.filters.headers
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import play.api.Configuration
+
 import play.api.http.HeaderNames
 import play.api.inject._
 import play.api.mvc._
+import play.api.Configuration
 
 /**
  * This class sets a number of common security headers on the HTTP request.
@@ -151,12 +152,12 @@ class SecurityHeadersFilter @Inject() (config: SecurityHeadersConfig) extends Es
    */
   protected def headers(request: RequestHeader, result: Result): Seq[(String, String)] = {
     val headers = Seq(
-      config.frameOptions.map(X_FRAME_OPTIONS_HEADER                                   -> _),
-      config.xssProtection.map(X_XSS_PROTECTION_HEADER                                 -> _),
-      config.contentTypeOptions.map(X_CONTENT_TYPE_OPTIONS_HEADER                      -> _),
+      config.frameOptions.map(X_FRAME_OPTIONS_HEADER -> _),
+      config.xssProtection.map(X_XSS_PROTECTION_HEADER -> _),
+      config.contentTypeOptions.map(X_CONTENT_TYPE_OPTIONS_HEADER -> _),
       config.permittedCrossDomainPolicies.map(X_PERMITTED_CROSS_DOMAIN_POLICIES_HEADER -> _),
-      config.contentSecurityPolicy.map(CONTENT_SECURITY_POLICY_HEADER                  -> _),
-      config.referrerPolicy.map(REFERRER_POLICY                                        -> _)
+      config.contentSecurityPolicy.map(CONTENT_SECURITY_POLICY_HEADER -> _),
+      config.referrerPolicy.map(REFERRER_POLICY -> _)
     ).flatten
 
     if (config.allowActionSpecificHeaders) {

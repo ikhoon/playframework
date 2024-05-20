@@ -7,22 +7,23 @@ package play.filters.headers
 import javax.inject.Inject
 
 import com.typesafe.config.ConfigFactory
-import play.api.Application
-import play.api.Configuration
 import play.api.http.HttpFilters
 import play.api.inject.bind
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.mvc.Results._
 import play.api.mvc.DefaultActionBuilder
+import play.api.mvc.EssentialFilter
 import play.api.mvc.Result
+import play.api.mvc.Results._
 import play.api.routing.Router
 import play.api.routing.SimpleRouterImpl
 import play.api.test.FakeRequest
 import play.api.test.PlaySpecification
 import play.api.test.WithApplication
+import play.api.Application
+import play.api.Configuration
 
 class Filters @Inject() (securityHeadersFilter: SecurityHeadersFilter) extends HttpFilters {
-  def filters = Seq(securityHeadersFilter)
+  def filters: Seq[EssentialFilter] = Seq(securityHeadersFilter)
 }
 
 object SecurityHeadersFilterSpec {
@@ -55,34 +56,38 @@ class SecurityHeadersFilterSpec extends PlaySpecification {
 
   "security headers" should {
     "work with default singleton apply method with all default options" in new WithApplication() {
-      val filter = SecurityHeadersFilter()
-      val rh     = FakeRequest()
+      override def running() = {
+        val filter = SecurityHeadersFilter()
+        val rh     = FakeRequest()
 
-      val Action = app.injector.instanceOf[DefaultActionBuilder]
-      val action = Action(Ok("success"))
-      val result = filter(action)(rh).run()
+        val Action = app.injector.instanceOf[DefaultActionBuilder]
+        val action = Action(Ok("success"))
+        val result = filter(action)(rh).run()
 
-      header(X_FRAME_OPTIONS_HEADER, result) must beSome("DENY")
-      header(X_XSS_PROTECTION_HEADER, result) must beSome("1; mode=block")
-      header(X_CONTENT_TYPE_OPTIONS_HEADER, result) must beSome("nosniff")
-      header(X_PERMITTED_CROSS_DOMAIN_POLICIES_HEADER, result) must beSome("master-only")
-      header(CONTENT_SECURITY_POLICY_HEADER, result) must beNone
-      header(REFERRER_POLICY, result) must beSome("origin-when-cross-origin, strict-origin-when-cross-origin")
+        header(X_FRAME_OPTIONS_HEADER, result) must beSome("DENY")
+        header(X_XSS_PROTECTION_HEADER, result) must beSome("1; mode=block")
+        header(X_CONTENT_TYPE_OPTIONS_HEADER, result) must beSome("nosniff")
+        header(X_PERMITTED_CROSS_DOMAIN_POLICIES_HEADER, result) must beSome("master-only")
+        header(CONTENT_SECURITY_POLICY_HEADER, result) must beNone
+        header(REFERRER_POLICY, result) must beSome("origin-when-cross-origin, strict-origin-when-cross-origin")
+      }
     }
 
     "work with singleton apply method using configuration" in new WithApplication() {
-      val filter = SecurityHeadersFilter(Configuration.reference)
-      val rh     = FakeRequest()
-      val Action = app.injector.instanceOf[DefaultActionBuilder]
-      val action = Action(Ok("success"))
-      val result = filter(action)(rh).run()
+      override def running() = {
+        val filter = SecurityHeadersFilter(Configuration.reference)
+        val rh     = FakeRequest()
+        val Action = app.injector.instanceOf[DefaultActionBuilder]
+        val action = Action(Ok("success"))
+        val result = filter(action)(rh).run()
 
-      header(X_FRAME_OPTIONS_HEADER, result) must beSome("DENY")
-      header(X_XSS_PROTECTION_HEADER, result) must beSome("1; mode=block")
-      header(X_CONTENT_TYPE_OPTIONS_HEADER, result) must beSome("nosniff")
-      header(X_PERMITTED_CROSS_DOMAIN_POLICIES_HEADER, result) must beSome("master-only")
-      header(CONTENT_SECURITY_POLICY_HEADER, result) must beNone
-      header(REFERRER_POLICY, result) must beSome("origin-when-cross-origin, strict-origin-when-cross-origin")
+        header(X_FRAME_OPTIONS_HEADER, result) must beSome("DENY")
+        header(X_XSS_PROTECTION_HEADER, result) must beSome("1; mode=block")
+        header(X_CONTENT_TYPE_OPTIONS_HEADER, result) must beSome("nosniff")
+        header(X_PERMITTED_CROSS_DOMAIN_POLICIES_HEADER, result) must beSome("master-only")
+        header(CONTENT_SECURITY_POLICY_HEADER, result) must beNone
+        header(REFERRER_POLICY, result) must beSome("origin-when-cross-origin, strict-origin-when-cross-origin")
+      }
     }
 
     "frame options" should {
@@ -97,9 +102,12 @@ class SecurityHeadersFilterSpec extends PlaySpecification {
         header(X_FRAME_OPTIONS_HEADER, result) must beSome("some frame option")
       }
 
-      "work with no frame options" in withApplication(Ok("hello"), """
-                                                                     |play.filters.headers.frameOptions=null
-        """.stripMargin) { app =>
+      "work with no frame options" in withApplication(
+        Ok("hello"),
+        """
+          |play.filters.headers.frameOptions=null
+        """.stripMargin
+      ) { app =>
         val result = route(app, FakeRequest()).get
 
         header(X_FRAME_OPTIONS_HEADER, result) must beNone
@@ -190,9 +198,12 @@ class SecurityHeadersFilterSpec extends PlaySpecification {
         header(CONTENT_SECURITY_POLICY_HEADER, result) must beSome("some content security policy")
       }
 
-      "work with none" in withApplication(Ok("hello"), """
-                                                         |play.filters.headers.contentSecurityPolicy=null
-        """.stripMargin) { app =>
+      "work with none" in withApplication(
+        Ok("hello"),
+        """
+          |play.filters.headers.contentSecurityPolicy=null
+        """.stripMargin
+      ) { app =>
         val result = route(app, FakeRequest()).get
 
         header(CONTENT_SECURITY_POLICY_HEADER, result) must beNone
@@ -211,9 +222,12 @@ class SecurityHeadersFilterSpec extends PlaySpecification {
         header(REFERRER_POLICY, result) must beSome("some referrer policy")
       }
 
-      "work with none" in withApplication(Ok("hello"), """
-                                                         |play.filters.headers.referrerPolicy=null
-        """.stripMargin) { app =>
+      "work with none" in withApplication(
+        Ok("hello"),
+        """
+          |play.filters.headers.referrerPolicy=null
+        """.stripMargin
+      ) { app =>
         val result = route(app, FakeRequest()).get
 
         header(REFERRER_POLICY, result) must beNone

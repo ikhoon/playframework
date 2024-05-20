@@ -7,30 +7,30 @@ package play.api.libs
 import java.io.File
 import java.io.IOException
 import java.lang.ref.Reference
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{ Files => JFiles }
 import java.nio.file._
+import java.nio.file.{ Files => JFiles }
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Clock
 import java.time.Instant
 import java.util.stream
-
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
-import akka.actor.ActorSystem
-import akka.actor.Cancellable
-import com.google.common.base.FinalizablePhantomReference
-import com.google.common.base.FinalizableReferenceQueue
-import com.google.common.collect.Sets
-import org.slf4j.LoggerFactory
-import play.api.Configuration
-import play.api.inject.ApplicationLifecycle
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.Future
 import scala.language.implicitConversions
 import scala.util.Failure
 import scala.util.Try
+
+import com.google.common.base.FinalizablePhantomReference
+import com.google.common.base.FinalizableReferenceQueue
+import com.google.common.collect.Sets
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.Cancellable
+import org.slf4j.LoggerFactory
+import play.api.inject.ApplicationLifecycle
+import play.api.Configuration
 
 /**
  * FileSystem utilities.
@@ -102,9 +102,10 @@ object Files {
      */
     def copyTo(to: Path, replace: Boolean): Path = {
       val destination =
-        try if (replace) JFiles.copy(path, to, StandardCopyOption.REPLACE_EXISTING)
-        else if (!to.toFile.exists()) JFiles.copy(path, to)
-        else to
+        try
+          if (replace) JFiles.copy(path, to, StandardCopyOption.REPLACE_EXISTING)
+          else if (!to.toFile.exists()) JFiles.copy(path, to)
+          else to
         catch {
           case _: FileAlreadyExistsException => to
         }
@@ -346,7 +347,7 @@ object Files {
   class DefaultTemporaryFileReaper @Inject() (actorSystem: ActorSystem, config: TemporaryFileReaperConfiguration)
       extends TemporaryFileReaper {
     private val logger                           = play.api.Logger(this.getClass)
-    private val blockingDispatcherName           = "play.akka.blockingIoDispatcher"
+    private val blockingDispatcherName           = "play.pekko.blockingIoDispatcher"
     private val blockingExecutionContext         = actorSystem.dispatchers.lookup(blockingDispatcherName)
     private var playTempFolder: Option[Path]     = None
     private var cancellable: Option[Cancellable] = None

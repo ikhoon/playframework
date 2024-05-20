@@ -12,26 +12,26 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
-import akka.stream.scaladsl.FileIO
-import akka.stream.scaladsl.Source
-import akka.stream.scaladsl.StreamConverters
-import akka.util.ByteString
-import play.api.http.HeaderNames._
-import play.api.http.FileMimeTypes
+import scala.collection.immutable.TreeMap
+import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
+
+import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.scaladsl.StreamConverters
+import org.apache.pekko.util.ByteString
 import play.api.http._
+import play.api.http.FileMimeTypes
+import play.api.http.HeaderNames._
 import play.api.i18n.Lang
 import play.api.i18n.MessagesApi
-import play.api.Logger
-import play.api.Mode
 import play.api.libs.typedmap.TypedEntry
 import play.api.libs.typedmap.TypedKey
 import play.api.libs.typedmap.TypedMap
+import play.api.Logger
+import play.api.Mode
 import play.core.utils.CaseInsensitiveOrdered
 import play.core.utils.HttpHeaderParameterEncoding
-
-import scala.jdk.CollectionConverters._
-import scala.collection.immutable.TreeMap
-import scala.concurrent.ExecutionContext
 
 /**
  * A simple HTTP response header, used for standard responses.
@@ -206,7 +206,7 @@ case class Result(
    *
    * For example:
    * {{{
-   * Redirect(routes.Application.index()).discardingCookies("theme")
+   * Redirect(routes.Application.index()).discardingCookies(DiscardingCookie("theme"))
    * }}}
    *
    * @param cookies the cookies to discard along to this result
@@ -339,7 +339,8 @@ case class Result(
       body.asJava,
       newSession.map(_.asJava).orNull,
       newFlash.map(_.asJava).orNull,
-      newCookies.map(_.asJava).asJava
+      newCookies.map(_.asJava).asJava,
+      attrs.asJava
     )
 
   /**
@@ -399,7 +400,7 @@ case class Result(
    * @param e1 The new attribute.
    * @return The new version of this object with the new attribute.
    */
-  def addAttrs(e1: TypedEntry[_]): Result = withAttrs(attrs + e1)
+  def addAttrs(e1: TypedEntry[?]): Result = withAttrs(attrs.updated(e1))
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -408,7 +409,7 @@ case class Result(
    * @param e2 The second new attribute.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_]): Result = withAttrs(attrs + e1 + e2)
+  def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?]): Result = withAttrs(attrs.updated(e1, e2))
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -418,7 +419,7 @@ case class Result(
    * @param e3 The third new attribute.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(e1: TypedEntry[_], e2: TypedEntry[_], e3: TypedEntry[_]): Result = withAttrs(attrs + e1 + e2 + e3)
+  def addAttrs(e1: TypedEntry[?], e2: TypedEntry[?], e3: TypedEntry[?]): Result = withAttrs(attrs.updated(e1, e2, e3))
 
   /**
    * Create a new versions of this object with the given attributes attached to it.
@@ -426,8 +427,8 @@ case class Result(
    * @param entries The new attributes.
    * @return The new version of this object with the new attributes.
    */
-  def addAttrs(entries: TypedEntry[_]*): Result =
-    withAttrs(attrs.+(entries: _*))
+  def addAttrs(entries: TypedEntry[?]*): Result =
+    withAttrs(attrs.updated(entries: _*))
 
   /**
    * Create a new versions of this object with the given attribute removed.
@@ -435,8 +436,8 @@ case class Result(
    * @param key The key of the attribute to remove.
    * @return The new version of this object with the attribute removed.
    */
-  def removeAttr(key: TypedKey[_]): Result =
-    withAttrs(attrs - key)
+  def removeAttr(key: TypedKey[?]): Result =
+    withAttrs(attrs.removed(key))
 }
 
 /**
@@ -591,7 +592,7 @@ trait Results {
       )
     }
 
-    private def streamFile(file: Source[ByteString, _], name: Option[String], length: Option[Long], inline: Boolean)(
+    private def streamFile(file: Source[ByteString, ?], name: Option[String], length: Option[Long], inline: Boolean)(
         implicit fileMimeTypes: FileMimeTypes
     ): Result = {
       Result(
@@ -688,7 +689,7 @@ trait Results {
      * @param content Source providing the content to stream.
      * @param contentType an optional content type.
      */
-    def chunked[C](content: Source[C, _], contentType: Option[String] = None)(
+    def chunked[C](content: Source[C, ?], contentType: Option[String] = None)(
         implicit writeable: Writeable[C]
     ): Result = {
       Result(
@@ -714,7 +715,7 @@ trait Results {
      *      deducing it from this file name if the {@code implicit fileMimeTypes} includes it or fallback to the content-type of the
      *      {@code implicit writeable} if unknown.
      */
-    def chunked[C](content: Source[C, _], inline: Boolean, fileName: Option[String])(
+    def chunked[C](content: Source[C, ?], inline: Boolean, fileName: Option[String])(
         implicit writeable: Writeable[C],
         fileMimeTypes: FileMimeTypes
     ): Result = {
@@ -737,7 +738,7 @@ trait Results {
      * @param contentLength an optional content length.
      * @param contentType an optional content type.
      */
-    def streamed[C](content: Source[C, _], contentLength: Option[Long], contentType: Option[String] = None)(
+    def streamed[C](content: Source[C, ?], contentLength: Option[Long], contentType: Option[String] = None)(
         implicit writeable: Writeable[C]
     ): Result = {
       Result(
@@ -761,7 +762,7 @@ trait Results {
      *      deducing it from this file name if the {@code implicit fileMimeTypes} includes it or fallback to the content-type of the
      *      {@code implicit writeable} if unknown.
      */
-    def streamed[C](content: Source[C, _], contentLength: Option[Long], inline: Boolean, fileName: Option[String])(
+    def streamed[C](content: Source[C, ?], contentLength: Option[Long], inline: Boolean, fileName: Option[String])(
         implicit writeable: Writeable[C],
         fileMimeTypes: FileMimeTypes
     ): Result = {

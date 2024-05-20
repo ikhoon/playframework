@@ -6,6 +6,7 @@ package scalaguide.binder.models
 
 import scala.Left
 import scala.Right
+
 import play.api.mvc.PathBindable
 import play.api.Logging
 
@@ -22,7 +23,7 @@ object User extends Logging {
     Some(user)
   }
 
-  //#bind
+  // #bind
   implicit def pathBinder(implicit intBinder: PathBindable[Int]): PathBindable[User] = new PathBindable[User] {
     override def bind(key: String, value: String): Either[String, User] = {
       for {
@@ -34,5 +35,5 @@ object User extends Logging {
       user.id.toString
     }
   }
-  //#bind
+  // #bind
 }
