@@ -4,23 +4,20 @@
 
 package play.core.server
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
-import akka.stream.Materializer
 import com.linecorp.armeria.common.Http1HeaderNaming
 import com.linecorp.armeria.common.logging.LogLevel
 import com.linecorp.armeria.server.encoding.DecodingService
 import com.linecorp.armeria.server.logging.{ContentPreviewingService, LoggingService}
 import com.linecorp.armeria.server.ServerBuilder
-import com.linecorp.armeria.server.{Server => ArmeriaHttpServer}
+import com.linecorp.armeria.server.Server as ArmeriaHttpServer
 import com.typesafe.config.ConfigMemorySize
 import io.netty.handler.ssl.ClientAuth
+import org.apache.pekko.Done
+import org.apache.pekko.actor.{ActorSystem, CoordinatedShutdown}
+import org.apache.pekko.stream.Materializer
+
 import java.net.InetSocketAddress
-import play.api.BuiltInComponents
-import play.api.Configuration
-import play.api.Logger
-import play.api.Mode
+import play.api.{Application, BuiltInComponents, Configuration, Logger, Mode, NoHttpFiltersComponents, Play}
 import play.api.http.HttpProtocol
 import play.api.internal.libs.concurrent.CoordinatedShutdownSupport
 import play.api.routing.Router
@@ -29,28 +26,26 @@ import play.core.server.ArmeriaServer.logger
 import play.core.server.Server.ServerStoppedReason
 import play.core.server.armeria.ArmeriaServerConfigurator
 import play.core.server.armeria.PlayHttpService
-import scala.collection.JavaConverters._
+
+import scala.collection.JavaConverters.*
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.FiniteDuration
-import scala.jdk.FutureConverters._
 import scala.util.control.NonFatal
 
 class ArmeriaServer(
     config: ServerConfig,
     val applicationProvider: ApplicationProvider,
     stopHook: () => Future[_],
-    val actorSystem: ActorSystem,
-    val materializer: Materializer
-) extends Server {
+    val actorSystem: ActorSystem)
+                   (implicit val materializer: Materializer) extends Server {
 
   private val serverConfig        = config.configuration.get[Configuration]("play.server")
   private val armeriaConfig     = serverConfig.get[Configuration]("armeria")
   private val maxContentLength    = Server.getPossiblyInfiniteBytes(serverConfig.underlying, "max-content-length")
   private val maxInitialLineLength = armeriaConfig.get[Int]("maxInitialLineLength")
-  private val maxContentLength    = Server.getPossiblyInfiniteBytes(serverConfig.underlying, "max-content-length")
   private val maxHeaderSize       = serverConfig.get[ConfigMemorySize]("max-header-size").toBytes.toInt
   private val httpsWantClientAuth = serverConfig.get[Boolean]("https.wantClientAuth")
   private val httpsNeedClientAuth = serverConfig.get[Boolean]("https.needClientAuth")
@@ -61,6 +56,10 @@ class ArmeriaServer(
     logger.warn(s"""Unexpected `play.server.armeria.http1HeaderNaming` [$http1HeaderNaming] is 
                    |specified. Only 'tradition' and 'lowercase' is supported.""".stripMargin)
   }
+
+  private val wsBufferLimit       = serverConfig.get[ConfigMemorySize]("websocket.frame.maxLength").toBytes.toInt
+  private val wsKeepAliveMode     = serverConfig.get[String]("websocket.periodic-keep-alive-mode")
+  private val wsKeepAliveMaxIdle  = serverConfig.get[Duration]("websocket.periodic-keep-alive-max-idle")
 
   private val coordinatedShutdown = CoordinatedShutdown(actorSystem)
 
@@ -137,7 +136,7 @@ class ArmeriaServer(
         )
     }
 
-    val service = new PlayHttpService(this)
+    val service = new PlayHttpService(this, wsBufferLimit, wsKeepAliveMode, wsKeepAliveMaxIdle)
     serverBuilder.serviceUnder("/", service)
 
     val armeriaServer = serverBuilder.build()
@@ -260,7 +259,7 @@ class ArmeriaServer(
 class ArmeriaServerProvider extends ServerProvider {
 
   override def createServer(context: ServerProvider.Context): ArmeriaServer = {
-    new ArmeriaServer(context.config, context.appProvider, context.stopHook, context.actorSystem, context.materializer)
+    new ArmeriaServer(context.config, context.appProvider, context.stopHook, context.actorSystem)(context.materializer)
   }
 }
 
@@ -270,7 +269,42 @@ object ArmeriaServer extends ServerFromRouter {
 
   implicit val provider: ArmeriaServerProvider = new ArmeriaServerProvider
 
-  protected override def createServerFromRouter(serverConfig: ServerConfig)(
+  protected override def createServerFromRouter(serverConf: ServerConfig)(
       routes: ServerComponents with BuiltInComponents => Router
-  ): Server = ???
+  ): Server = {
+    new ArmeriaServerComponents with BuiltInComponents with NoHttpFiltersComponents {
+      override lazy val serverConfig: ServerConfig = serverConf
+      override def router: Router                  = routes(this)
+    }.server
+  }
 }
+/**
+ * Cake for building a simple Armeria server.
+ */
+trait ArmeriaServerComponents extends ServerComponents {
+  lazy val server: ArmeriaServer = {
+    // Start the application first
+    Play.start(application)
+    new ArmeriaServer(serverConfig, ApplicationProvider(application), serverStopHook, application.actorSystem)(
+      application.materializer
+    )
+  }
+
+  def application: Application
+}
+
+/**
+ * A convenient helper trait for constructing an ArmeriaServer, for example:
+ *
+ * {{{
+ *   val components = new DefaultArmeriaServerComponents {
+ *     override lazy val router = {
+ *       case GET(p"/") => Action(parse.json) { body =>
+ *         Ok("Hello")
+ *       }
+ *     }
+ *   }
+ *   val server = components.server
+ * }}}
+ */
+trait DefaultArmeriaServerComponents extends ArmeriaServerComponents with BuiltInComponents with NoHttpFiltersComponents

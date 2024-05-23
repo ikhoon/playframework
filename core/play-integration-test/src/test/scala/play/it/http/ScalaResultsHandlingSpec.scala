@@ -28,7 +28,7 @@ import play.it._
 
 class NettyScalaResultsHandlingSpec     extends ScalaResultsHandlingSpec with NettyIntegrationSpecification
 class PekkoHttpScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with PekkoHttpIntegrationSpecification
-class ArmeriaScalaResultsHandlingSpec extends ScalaResultsHandlingSpec with ArmeriaIntegrationSpecification
+class ArmeriaScalaResultsHandlingSpec   extends ScalaResultsHandlingSpec with ArmeriaIntegrationSpecification
 
 trait ScalaResultsHandlingSpec
     extends PlaySpecification
@@ -224,8 +224,8 @@ trait ScalaResultsHandlingSpec
       response.headers.get(CONTENT_LENGTH) must beNone
       response.headers.get(CONNECTION) must beSome("close")
       response.body must beLeft("abc")
-    // As per https://www.rfc-editor.org/rfc/rfc2068.html#section-19.7.1, HTTP/1.1 does not need to close
-    // the connection after transfer encoding.
+      // As per https://www.rfc-editor.org/rfc/rfc2068.html#section-19.7.1, HTTP/1.1 does not need to close
+      // the connection after transfer encoding.
     }.skipUntilArmeriaFixed
 
     "close the HTTP 1.1 connection when requested" in withServer(
@@ -236,8 +236,7 @@ trait ScalaResultsHandlingSpec
       )(0)
       response.status must_== 200
       response.headers.get(CONNECTION) must beSome("close")
-      // TODO(ikhoon): Remove once https://github.com/line/armeria/pull/4531 is merged
-    }.skipUntilArmeriaFixed
+    }
 
     "close the HTTP 1.0 connection when requested" in withServer(
       Results.Ok.withHeaders(CONNECTION -> "close")
@@ -247,8 +246,7 @@ trait ScalaResultsHandlingSpec
       )(0)
       response.status must_== 200
       response.headers.get(CONNECTION).map(_.toLowerCase(ENGLISH)) must beOneOf(None, Some("close"))
-      // TODO(ikhoon): Remove once https://github.com/line/armeria/pull/4531 is merged
-    }.skipUntilArmeriaFixed
+    }
 
     "close the connection when the connection close header is present" in withServer(
       Results.Ok
@@ -282,7 +280,7 @@ trait ScalaResultsHandlingSpec
         case s => s.toLowerCase(ENGLISH) must_== "keep-alive"
       }
       responses(1).status must_== 200
-      // TODO(ikhoon): Remove `skipUntilArmeriaFixed` once https://github.com/line/armeria/pull/4531 is merged.
+      // Armeria does not officially support HTTP/1.0. An HTTP/1.0 request is treated as an HTTP/1.1 request.
     }.skipUntilArmeriaFixed
 
     "keep alive HTTP 1.1 connections" in withServer(
@@ -389,7 +387,7 @@ trait ScalaResultsHandlingSpec
         )
         .head
       response.status must_== 505
-      // Armeria does not officially support HTTP/1.0. An HTTP/1.0 request is treated like an HTTP/1.1 request.
+      // Armeria does not officially support HTTP/1.0. An HTTP/1.0 request is treated as an HTTP/1.1 request.
     }.skipUntilArmeriaFixed
 
     "return a 500 error on response with null header" in withServer(

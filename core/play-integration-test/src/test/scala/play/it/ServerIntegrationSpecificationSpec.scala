@@ -24,7 +24,7 @@ class PekkoHttpServerIntegrationSpecificationSpec
 class ArmeriaServerIntegrationSpecificationSpec
     extends ServerIntegrationSpecificationSpec
     with ArmeriaIntegrationSpecification {
-  override def expectedServerTag = Some("armeria")
+  override def expectedServerTag: Option[String] = Some("armeria")
 }
 
 /**

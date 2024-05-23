@@ -151,7 +151,7 @@ trait HeadActionSpec
       response.body[String] must_== ""
       response.header(CONTENT_LENGTH) must beNone
       // TODO(ikhoon): Remove `skipUntilArmeriaFixed` when https://github.com/line/armeria/issues/4509 is fixed.
-    }.skipUntilArmeriaFixed
+    }
 
     "Keep Content-Length for streamed responses" in withServer { client =>
       val response = await(client.url("/stream/10").head())

@@ -4,10 +4,6 @@
 
 package play.core.server.armeria
 
-import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
 import com.linecorp.armeria.common.stream.StreamMessage
 import com.linecorp.armeria.common.HttpData
 import com.linecorp.armeria.common.HttpHeaderNames
@@ -21,6 +17,10 @@ import com.linecorp.armeria.common.ResponseHeaders
 import com.linecorp.armeria.server.ServiceRequestContext
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.HttpHeaderValues
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.util.ByteString
+
 import java.net.{InetAddress, InetSocketAddress, URI}
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -44,22 +44,23 @@ import play.core.server.armeria.ArmeriaModelConversion.MAX_AGGREGATION_SIZE
 import play.core.server.armeria.ArmeriaModelConversion.logger
 import play.core.server.common.ForwardedHeaderHandler
 import play.core.server.common.ServerResultUtils
+
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 private[armeria] final class ArmeriaModelConversion(
-    resultUtils: ServerResultUtils,
-    forwardedHeaderHandler: ForwardedHeaderHandler,
-) {
+                                                     resultUtils: ServerResultUtils,
+                                                     forwardedHeaderHandler: ForwardedHeaderHandler,
+                                                   ) {
 
   /**
    * Convert an Armeria `HttpRequest` to a Play `RequestHeader`.
    */
   def convertRequest(ctx: ServiceRequestContext): RequestHeader = {
-    val headers    = new ArmeriaHeadersWrapper(ctx.request().headers())
+    val headers = new ArmeriaHeadersWrapper(ctx.request().headers())
     val connection = createRemoteConnection(ctx, headers)
-    val target     = createRequestTarget(ctx)
-    val version    = createHttpVersion(ctx)
+    val target = createRequestTarget(ctx)
+    val version = createHttpVersion(ctx)
     new RequestHeaderImpl(
       connection,
       ctx.method().name(),
@@ -90,16 +91,16 @@ private[armeria] final class ArmeriaModelConversion(
 
   /** Create a new Armeria response from the result */
   def convertResult(result: Result, requestHeader: RequestHeader, errorHandler: HttpErrorHandler)(
-      implicit mat: Materializer
+    implicit mat: Materializer
   ): Future[HttpResponse] = {
     resultUtils.resultConversionWithErrorHandling(requestHeader, result, errorHandler) { result =>
       val status = result.header.reasonPhrase match {
         case Some(phrase) => new HttpStatus(result.header.status, phrase)
-        case None         => HttpStatus.valueOf(result.header.status)
+        case None => HttpStatus.valueOf(result.header.status)
       }
 
-      val skipEntity     = requestHeader.method == HttpMethod.HEAD.name()
-      val headers        = resultUtils.splitSetCookieHeaders(result.header.headers)
+      val skipEntity = requestHeader.method == HttpMethod.HEAD.name()
+      val headers = resultUtils.splitSetCookieHeaders(result.header.headers)
       val headersBuilder = ResponseHeaders.builder(status)
 
       headers.foreach {
@@ -111,8 +112,9 @@ private[armeria] final class ArmeriaModelConversion(
           headersBuilder.add(name, value)
       }
 
+      val resultBody = result.body
       if (resultUtils.mayHaveEntity(result.header.status)) {
-        result.body.contentLength.foreach { contentLength =>
+        resultBody.contentLength.foreach { contentLength =>
           val manualContentLength = headersBuilder.contentLength()
           if (manualContentLength == -1) {
             headersBuilder.contentLength(contentLength)
@@ -126,7 +128,7 @@ private[armeria] final class ArmeriaModelConversion(
         }
       }
 
-      result.body.contentType.foreach { contentType =>
+      resultBody.contentType.foreach { contentType =>
         val contentType0 = headersBuilder.contentType()
         if (contentType0 == null) {
           headersBuilder.contentType(MediaType.parse(contentType))
@@ -139,9 +141,16 @@ private[armeria] final class ArmeriaModelConversion(
         }
       }
 
+      if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
+        if (resultBody.isInstanceOf[HttpEntity.Streamed] || resultBody.isInstanceOf[HttpEntity.Chunked]) {
+          if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
+            headersBuilder.contentLengthUnknown()
+          }
+        }
+      }
       // TODO(ikhoon): Add Date and Server headers.
 
-      val response: HttpResponse = result.body match {
+      val response: HttpResponse = resultBody match {
         case any if skipEntity =>
           resultUtils.cancelEntity(any)
           HttpResponse.of(headersBuilder.build())
@@ -155,10 +164,6 @@ private[armeria] final class ArmeriaModelConversion(
 
         case HttpEntity.Streamed(stream, _, _) =>
           val publisher = stream.map(toHttpData).runWith(Sink.asPublisher(false))
-          // Use contentLenghUnknown
-          if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
-            headersBuilder.set(HttpHeaderNames.CONTENT_LENGTH, "-1");
-          }
           HttpResponse.of(headersBuilder.build(), publisher)
 
         case HttpEntity.Chunked(chunks, _) =>
@@ -175,9 +180,6 @@ private[armeria] final class ArmeriaModelConversion(
                 }
             }
             .runWith(Sink.asPublisher(false))
-//          if (!headersBuilder.contains(HttpHeaderNames.CONTENT_LENGTH)) {
-//            headersBuilder.set(HttpHeaderNames.CONTENT_LENGTH, "-1");
-//          }
           headersBuilder.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED.toString())
           HttpResponse.of(headersBuilder.build(), publisher)
       }
@@ -212,7 +214,7 @@ private[armeria] final class ArmeriaModelConversion(
   /** Capture a request's connection info from the request context and headers. */
   private def createRemoteConnection(ctx: ServiceRequestContext, headers: Headers): RemoteConnection = {
     val connection = new RemoteConnection {
-      override def remoteAddress: InetAddress = ctx.remoteAddress[InetSocketAddress]().getAddress
+      override def remoteAddress: InetAddress = ctx.remoteAddress().getAddress
 
       override def secure: Boolean = ctx.sessionProtocol().isTls
 

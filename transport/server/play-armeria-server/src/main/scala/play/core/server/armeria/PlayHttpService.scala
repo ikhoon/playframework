@@ -4,32 +4,45 @@
 
 package play.core.server.armeria
 
-import akka.stream.Materializer
-import com.linecorp.armeria.common.HttpRequest
-import com.linecorp.armeria.common.HttpResponse
-import com.linecorp.armeria.server.HttpService
-import com.linecorp.armeria.server.ServiceRequestContext
-import play.api.Application
-import play.api.Logger
-import play.api.Mode
-import play.api.http.DefaultHttpErrorHandler
-import play.api.http.DevHttpErrorHandler
-import play.api.http.HttpErrorHandler
-import play.api.mvc.EssentialAction
-import play.api.mvc.RequestHeader
-import play.api.mvc.WebSocket
-import play.core.server.ArmeriaServer
-import play.core.server.Server
-import play.core.server.common.ReloadCache
-import play.core.server.common.ServerDebugInfo
-import play.core.server.common.ServerResultUtils
-import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.FutureConverters.FutureOps
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import com.linecorp.armeria.common.HttpHeaderNames
+import com.linecorp.armeria.common.HttpRequest
+import com.linecorp.armeria.common.HttpResponse
+import com.linecorp.armeria.server.websocket.WebSocketProtocolHandler
+import com.linecorp.armeria.server.websocket.WebSocketService
+import com.linecorp.armeria.server.HttpService
+import com.linecorp.armeria.server.ServiceRequestContext
+import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory
+import io.netty.handler.codec.http.HttpResponseStatus
+import org.apache.pekko.stream.Materializer
+import play.api.http.DefaultHttpErrorHandler
+import play.api.http.DevHttpErrorHandler
+import play.api.http.HeaderNames
+import play.api.http.HttpErrorHandler
+import play.api.http.Status
+import play.api.libs.streams.Accumulator
+import play.api.mvc.EssentialAction
+import play.api.mvc.RequestHeader
+import play.api.mvc.Results
+import play.api.mvc.WebSocket
+import play.api.Application
+import play.api.Logger
+import play.api.Mode
+import play.core.server.common.{ReloadCache, ServerDebugInfo, ServerResultUtils, WebSocketFlowHandler}
+import play.core.server.ArmeriaServer
+import play.core.server.Server
 
-private[server] final class PlayHttpService(server: ArmeriaServer) extends HttpService {
+private[server] final class PlayHttpService(
+    server: ArmeriaServer,
+    wsBufferLimit: Int,
+    wsKeepAliveMode: String,
+    wsKeepAliveMaxIdle: Duration,
+) extends HttpService {
 
   import PlayHttpService._
 
@@ -69,30 +82,69 @@ private[server] final class PlayHttpService(server: ArmeriaServer) extends HttpS
     }
   }
 
+  private val webSocketProtocolHandler: WebSocketProtocolHandler =
+    WebSocketService
+      // Armeria WebSocket handler is not used, only the codec is used.
+      .builder((_, in) => in)
+      // For now, like Netty, select an arbitrary subprotocol from the list of subprotocols proposed by the client
+      // Eventually it would be better to allow the handler to specify the protocol it selected
+      // See also https://github.com/playframework/playframework/issues/7895
+      .subprotocols("*")
+      .build()
+      .protocolHandler()
+
   // TODO(ikhoon): Add an option for ExchangeType
   override def serve(ctx: ServiceRequestContext, req: HttpRequest): HttpResponse = {
     logger.trace("Http request received by Armeria: " + ctx)
 
-    val tryApp: Try[Application] = server.applicationProvider.get
-    val cacheValues              = reloadCache.cachedFrom(tryApp)
-    val request                  = cacheValues.modelConversion.convertRequest(ctx)
-    val debugHeader              = ServerDebugInfo.attachToRequestHeader(request, cacheValues.serverDebugInfo)
-    val (requestHeader, handler) = Server.getHandlerFor(debugHeader, tryApp, fallbackErrorHandler)
+    val tryApp: Try[Application]       = server.applicationProvider.get
+    val cacheValues                    = reloadCache.cachedFrom(tryApp)
+    val request                        = cacheValues.modelConversion.convertRequest(ctx)
+    val debugHeader                    = ServerDebugInfo.attachToRequestHeader(request, cacheValues.serverDebugInfo)
+    val (taggedRequestHeader, handler) = Server.getHandlerFor(debugHeader, tryApp, fallbackErrorHandler)
 
+    implicit val mat: Materializer = tryApp match {
+      case Success(app) => app.materializer
+      case Failure(_)   => server.materializer
+    }
+
+    import play.core.Execution.Implicits.trampoline
     val future: Future[HttpResponse] = handler match {
       case action: EssentialAction =>
-        handleAction(action, requestHeader, req, tryApp)
-      case _: WebSocket =>
-        // TODO(ikhoon): Support WebSocket when https://github.com/line/armeria/pull/3904 is merged.
-        val ex = new UnsupportedOperationException("Armeria server can't handle WebSocket")
-        logger.error(ex.getMessage, ex)
-        throw ex
+        handleAction(action, taggedRequestHeader, req, tryApp)
+      case ws: WebSocket if req.headers().get(HttpHeaderNames.UPGRADE, "").equalsIgnoreCase("websocket") =>
+        logger.trace("Serving this request with: " + ws)
+        ws(taggedRequestHeader).flatMap {
+          case Left(result) =>
+            modelConversion(tryApp).convertResult(result, taggedRequestHeader, errorHandler(tryApp))
+          case Right(flow) =>
+            val processor = WebSocketFlowHandler
+              .webSocketProtocol(wsBufferLimit, wsKeepAliveMode, wsKeepAliveMaxIdle)
+              .join(flow)
+              .toProcessor
+              .run()
+            Future.successful(WebSocketHandler.handleWebSocket(webSocketProtocolHandler, ctx, req, processor))
+        }
+      // handle bad websocket request
+      case ws: WebSocket =>
+        logger.trace(s"Bad websocket request: $request")
+        val action = EssentialAction(_ =>
+          Accumulator.done(
+            Results
+              .Status(Status.UPGRADE_REQUIRED)("Upgrade to WebSocket required")
+              .withHeaders(
+                HeaderNames.UPGRADE    -> "websocket",
+                HeaderNames.CONNECTION -> HeaderNames.UPGRADE
+              )
+          )
+        )
+        handleAction(action, taggedRequestHeader, req, tryApp)
       case h =>
         val ex = new IllegalStateException(s"Armeria server doesn't handle Handlers of this type: $h")
         logger.error(ex.getMessage, ex)
         throw ex
     }
-    HttpResponse.from(future.asJava)
+    HttpResponse.of(future.asJava)
   }
 
   private def handleAction(
@@ -100,12 +152,7 @@ private[server] final class PlayHttpService(server: ArmeriaServer) extends HttpS
       requestHeader: RequestHeader,
       request: HttpRequest,
       tryApp: Try[Application]
-  ): Future[HttpResponse] = {
-    implicit val mat: Materializer = tryApp match {
-      case Success(app) => app.materializer
-      case Failure(_)   => server.materializer
-    }
-    import play.core.Execution.Implicits.trampoline
+  )(implicit mat: Materializer, ec: ExecutionContext) : Future[HttpResponse] = {
 
     // Execute the action on the Play default execution context
     val actionFuture = Future(action(requestHeader))(mat.executionContext)
@@ -125,8 +172,9 @@ private[server] final class PlayHttpService(server: ArmeriaServer) extends HttpS
         }
       // Clean and validate the action's result
       validatedResult <- {
-        val cleanedResult = resultUtils(tryApp).prepareCookies(requestHeader, actionResult)
-        resultUtils(tryApp).validateResult(requestHeader, cleanedResult, errorHandler(tryApp))
+        val serverResultUtils = resultUtils(tryApp)
+        val cleanedResult     = serverResultUtils.prepareCookies(requestHeader, actionResult)
+        serverResultUtils.validateResult(requestHeader, cleanedResult, errorHandler(tryApp))
       }
       // Convert the result to a Netty HttpResponse
       convertedResult <- modelConversion(tryApp)

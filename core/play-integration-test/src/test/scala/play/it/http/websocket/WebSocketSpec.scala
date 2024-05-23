@@ -59,6 +59,7 @@ class PekkoHttpWebSocketSpec extends WebSocketSpec with PekkoHttpIntegrationSpec
     )
   }
 }
+class ArmeriaWebSocketSpec extends WebSocketSpec with ArmeriaIntegrationSpecification
 
 class NettyPingWebSocketOnlySpec     extends PingWebSocketSpec with NettyIntegrationSpecification
 class PekkoHttpPingWebSocketOnlySpec extends PingWebSocketSpec with PekkoHttpIntegrationSpecification

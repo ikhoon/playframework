@@ -31,7 +31,7 @@ object Dependencies {
     "org.scalacheck" %% "scalacheck"        % "1.18.0"      % Test
   )
 
-  val jacksonVersion  = "2.14.3"
+  val jacksonVersion  = "2.17.0"
   val jacksonDatabind = Seq("com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion)
   val jacksons = Seq(
     "com.fasterxml.jackson.core"     % "jackson-core",
@@ -184,7 +184,10 @@ object Dependencies {
 
   val pekkoHttp = "org.apache.pekko" %% "pekko-http-core" % pekkoHttpVersion
 
-  val armeria = ("com.linecorp.armeria" % "armeria" % "1.21.0").exclude("org.slf4j", "slf4j-api")
+  val armeria = ("com.linecorp.armeria" % "armeria" % "1.28.4")
+    .exclude("org.slf4j", "slf4j-api")
+    // Exclude jackson-databind to avoid conflicts with Play's jackson-databind
+    .exclude("com.fasterxml.jackson.core", "jackson-databind")
 
   val cookieEncodingDependencies = slf4j
 
